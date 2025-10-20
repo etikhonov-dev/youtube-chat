@@ -3,10 +3,10 @@
 import { YoutubeLoader } from "@langchain/community/document_loaders/web/youtube";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
-import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { MemoryVectorStore } from "@langchain/classic/vectorstores/memory";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
+import { Document } from "@langchain/core/documents";
 import readline from "readline";
 import { Innertube } from "youtubei.js";
 import clipboardy from "clipboardy";
@@ -55,6 +55,135 @@ function formatTimestamp(seconds) {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
+// SemanticChunker - splits text based on semantic similarity
+class SemanticChunker {
+  constructor(embeddings, options = {}) {
+    this.embeddings = embeddings;
+    this.bufferSize = options.bufferSize || 1;
+    this.breakpointThresholdType = options.breakpointThresholdType || "percentile";
+    this.breakpointThresholdAmount = options.breakpointThresholdAmount;
+    this.sentenceSplitRegex = options.sentenceSplitRegex || /(?<=[.?!])\s+/;
+  }
+
+  // Calculate cosine distance between two vectors
+  cosineDistance(vecA, vecB) {
+    const dotProduct = vecA.reduce((sum, val, i) => sum + val * vecB[i], 0);
+    const magnitudeA = Math.sqrt(vecA.reduce((sum, val) => sum + val * val, 0));
+    const magnitudeB = Math.sqrt(vecB.reduce((sum, val) => sum + val * val, 0));
+    return 1 - dotProduct / (magnitudeA * magnitudeB);
+  }
+
+  // Calculate breakpoint threshold based on distances
+  calculateBreakpointThreshold(distances) {
+    if (this.breakpointThresholdAmount !== undefined) {
+      return this.breakpointThresholdAmount;
+    }
+
+    if (this.breakpointThresholdType === "percentile") {
+      // Use 95th percentile as default
+      const sorted = [...distances].sort((a, b) => a - b);
+      const index = Math.floor(sorted.length * 0.95);
+      return sorted[index];
+    } else if (this.breakpointThresholdType === "standard_deviation") {
+      const mean = distances.reduce((sum, val) => sum + val, 0) / distances.length;
+      const variance = distances.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / distances.length;
+      const stdDev = Math.sqrt(variance);
+      return mean + stdDev;
+    } else if (this.breakpointThresholdType === "interquartile") {
+      const sorted = [...distances].sort((a, b) => a - b);
+      const q1Index = Math.floor(sorted.length * 0.25);
+      const q3Index = Math.floor(sorted.length * 0.75);
+      const q1 = sorted[q1Index];
+      const q3 = sorted[q3Index];
+      const iqr = q3 - q1;
+      return q3 + 1.5 * iqr;
+    }
+
+    // Default to percentile
+    const sorted = [...distances].sort((a, b) => a - b);
+    const index = Math.floor(sorted.length * 0.95);
+    return sorted[index];
+  }
+
+  async splitText(text) {
+    // Split into sentences
+    const sentences = text.split(this.sentenceSplitRegex).filter(s => s.trim().length > 0);
+
+    if (sentences.length <= 1) {
+      return [text];
+    }
+
+    // Group sentences into buffers
+    const groups = [];
+    for (let i = 0; i < sentences.length; i += this.bufferSize) {
+      const group = sentences.slice(i, i + this.bufferSize).join(" ");
+      groups.push(group);
+    }
+
+    if (groups.length <= 1) {
+      return [text];
+    }
+
+    // Get embeddings for each group
+    const embeddings = await this.embeddings.embedDocuments(groups);
+
+    // Calculate distances between consecutive embeddings
+    const distances = [];
+    for (let i = 0; i < embeddings.length - 1; i++) {
+      const distance = this.cosineDistance(embeddings[i], embeddings[i + 1]);
+      distances.push(distance);
+    }
+
+    if (distances.length === 0) {
+      return [text];
+    }
+
+    // Calculate threshold
+    const threshold = this.calculateBreakpointThreshold(distances);
+
+    // Find breakpoints
+    const breakpoints = [0];
+    for (let i = 0; i < distances.length; i++) {
+      if (distances[i] > threshold) {
+        breakpoints.push(i + 1);
+      }
+    }
+    breakpoints.push(groups.length);
+
+    // Create chunks based on breakpoints
+    const chunks = [];
+    for (let i = 0; i < breakpoints.length - 1; i++) {
+      const start = breakpoints[i];
+      const end = breakpoints[i + 1];
+      const chunk = groups.slice(start, end).join(" ");
+      if (chunk.trim().length > 0) {
+        chunks.push(chunk);
+      }
+    }
+
+    return chunks.length > 0 ? chunks : [text];
+  }
+
+  async splitDocuments(documents) {
+    const splitDocs = [];
+
+    for (const doc of documents) {
+      const chunks = await this.splitText(doc.pageContent);
+
+      for (const chunk of chunks) {
+        splitDocs.push(
+          new Document({
+            pageContent: chunk,
+            metadata: { ...doc.metadata }
+          })
+        );
+      }
+    }
+
+    return splitDocs;
+  }
+}
+
 // Initialize the system
 async function initialize() {
   console.log("\n🔄 Loading YouTube video transcript...");
@@ -94,22 +223,23 @@ async function initialize() {
   console.log(`👤 Author: ${videoMetadata.author}`);
   console.log(`⏱️  Duration: ${formatTimestamp(videoMetadata.duration)}`);
 
-  // Split the transcript into chunks
-  console.log("\n🔄 Processing transcript...");
-  const textSplitter = new RecursiveCharacterTextSplitter({
-    chunkSize: 1000,
-    chunkOverlap: 200,
-  });
-
-  const splits = await textSplitter.splitDocuments(docs);
-  console.log(`✅ Created ${splits.length} chunks`);
-
-  // Create embeddings and vector store
-  console.log("\n🔄 Creating vector store with embeddings...");
+  // Create embeddings model first (needed for semantic chunking)
+  console.log("\n🔄 Creating embeddings model...");
   const embeddings = new GoogleGenerativeAIEmbeddings({
     model: "text-embedding-004",
   });
 
+  // Split the transcript into semantic chunks
+  console.log("\n🔄 Processing transcript with semantic chunking...");
+  const textSplitter = new SemanticChunker(embeddings, {
+    breakpointThresholdType: "percentile",
+  });
+
+  const splits = await textSplitter.splitDocuments(docs);
+  console.log(`✅ Created ${splits.length} semantic chunks`);
+
+  // Create vector store
+  console.log("\n🔄 Creating vector store...");
   vectorStore = await MemoryVectorStore.fromDocuments(splits, embeddings);
   console.log("✅ Vector store ready");
 }

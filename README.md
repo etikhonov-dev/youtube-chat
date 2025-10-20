@@ -105,14 +105,6 @@ You: exit
 
 Edit `index.js` to adjust:
 
-**Chunk Size** (line 71-73):
-```javascript
-const textSplitter = new RecursiveCharacterTextSplitter({
-  chunkSize: 1000,        // Larger = more context per chunk
-  chunkOverlap: 200,      // Prevents splitting related content
-});
-```
-
 **Agent Parameters** (line 139-145):
 ```javascript
 const llm = new ChatGoogleGenerativeAI({
