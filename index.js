@@ -224,24 +224,19 @@ async function initialize() {
   console.log(`⏱️  Duration: ${formatTimestamp(videoMetadata.duration)}`);
 
   // Create embeddings model first (needed for semantic chunking)
-  console.log("\n🔄 Creating embeddings model...");
   const embeddings = new GoogleGenerativeAIEmbeddings({
     model: "text-embedding-004",
   });
 
   // Split the transcript into semantic chunks
-  console.log("\n🔄 Processing transcript with semantic chunking...");
   const textSplitter = new SemanticChunker(embeddings, {
     breakpointThresholdType: "percentile",
   });
 
   const splits = await textSplitter.splitDocuments(docs);
-  console.log(`✅ Created ${splits.length} semantic chunks`);
 
   // Create vector store
-  console.log("\n🔄 Creating vector store...");
   vectorStore = await MemoryVectorStore.fromDocuments(splits, embeddings);
-  console.log("✅ Vector store ready");
 }
 
 // Tool: Search the video transcript
@@ -267,8 +262,7 @@ const searchTranscriptTool = new DynamicStructuredTool({
     const results = await vectorStore.similaritySearch(query, numResults);
 
     const formattedResults = results.map((doc) => {
-      const timestamp = formatTimestamp(doc.metadata.timestamp);
-      return `[${timestamp}] ${doc.pageContent}`;
+      return doc.pageContent;
     }).join("\n\n");
 
     return formattedResults || "No relevant information found.";
@@ -413,11 +407,11 @@ What are the main topics covered?
 
 Based on the video "${videoMetadata.title}", the main topics are:
 
-1. [Topic Name] [MM:SS - MM:SS]
-2. [Topic Name] [MM:SS - MM:SS]
-3. [Topic Name] [MM:SS - MM:SS]
+1. [Topic Name]
+2. [Topic Name]
+3. [Topic Name]
 
-Search the transcript thoroughly to identify 5-8 main topics with their timestamp ranges. Be specific about what each topic covers.`;
+Search the transcript thoroughly to identify 5-8 main topics. Be specific about what each topic covers.`;
 
   try {
     const response = await agent.invoke({
