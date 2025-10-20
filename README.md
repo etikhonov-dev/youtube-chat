@@ -113,7 +113,7 @@ const textSplitter = new RecursiveCharacterTextSplitter({
 ```javascript
 const llm = new ChatGoogleGenerativeAI({
   model: "gemini-2.0-flash-001",
-  temperature: 0,          // 0 = deterministic, 1 = creative
+  // temperature: 0,          // 0 = deterministic, 1 = creative
   maxRetries: 2,
 });
 ```

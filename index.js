@@ -8,6 +8,7 @@ import { MemoryVectorStore } from "@langchain/classic/vectorstores/memory";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import readline from "readline";
+import { Innertube } from "youtubei.js";
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -22,6 +23,21 @@ const youtubeUrl = args[0];
 // Global variables to store video data
 let vectorStore;
 let videoMetadata = {};
+
+// Extract video ID from YouTube URL
+function extractVideoId(url) {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+    /^([a-zA-Z0-9_-]{11})$/
+  ];
+
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+
+  throw new Error("Invalid YouTube URL format");
+}
 
 // Format timestamp from seconds to MM:SS or HH:MM:SS
 function formatTimestamp(seconds) {
@@ -52,12 +68,23 @@ async function initialize() {
     throw new Error("Failed to load transcript. Video may not have captions available.");
   }
 
+  // Fetch video duration using youtubei.js
+  let duration = 0;
+  try {
+    const videoId = extractVideoId(youtubeUrl);
+    const youtube = await Innertube.create();
+    const info = await youtube.getInfo(videoId);
+    duration = info.basic_info.duration || 0;
+  } catch (error) {
+    console.warn("⚠️  Could not fetch video duration:", error.message);
+  }
+
   // Store video metadata
   videoMetadata = {
     title: docs[0].metadata.title || "Unknown",
     description: docs[0].metadata.description || "No description",
     author: docs[0].metadata.author || "Unknown",
-    duration: docs[0].metadata.duration || 0,
+    duration: duration,
   };
 
   console.log(`📹 Video: ${videoMetadata.title}`);
@@ -136,7 +163,7 @@ Description: ${videoMetadata.description}`;
 async function createAgent() {
   const llm = new ChatGoogleGenerativeAI({
     model: "gemini-2.0-flash-001",
-    temperature: 0,
+    // temperature: 0,
     maxRetries: 2,
   });
 
