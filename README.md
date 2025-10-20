@@ -18,19 +18,23 @@ A conversational AI agent that lets you chat with YouTube videos using LangChain
 
 ## Installation
 
-1. Clone or navigate to this directory
+1. Clone the repository from GitHub:
+   ```bash
+   git clone https://github.com/Genebio/youtube-chat.git
+   cd youtube-chat
+   ```
+
 2. Install dependencies:
    ```bash
-   yarn install
+   npm install
    ```
 
-3. Set up your Google API key:
+3. Link the package globally:
    ```bash
-   cp .env.example .env
-   # Edit .env and add your GOOGLE_API_KEY
+   npm link
    ```
 
-   Or export it directly:
+4. Set up your Google API key:
    ```bash
    export GOOGLE_API_KEY='your_api_key_here'
    ```
@@ -40,13 +44,13 @@ A conversational AI agent that lets you chat with YouTube videos using LangChain
 ### Basic Usage
 
 ```bash
-node index.js <youtube-url>
+ytchat <youtube-url>
 ```
 
 ### Example
 
 ```bash
-node index.js https://youtu.be/bZQun8Y4L2A
+ytchat https://youtu.be/bZQun8Y4L2A
 ```
 
 ### Interactive Session
@@ -147,17 +151,15 @@ func: async ({ query, numResults = 4 }) => {
 - Subsequent questions should be faster
 - Consider reducing chunk size for shorter videos
 
-## Future Enhancements
-
-Potential additions:
-- Persistent vector store (HNSWLib) for reusing indexed videos
-- CLI flags for verbose mode, chunk size, etc.
-- Export conversation history
-- Multi-language support
-- Search by time range tool
-- Summary generation tool
-- Comparison between multiple videos
-
 ## License
 
-MIT
+This project is licensed for **non-commercial use only**.
+
+Copyright (c) 2025
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to use the Software for personal, educational, and non-commercial purposes only, subject to the following conditions:
+
+- The Software may not be used for commercial purposes without explicit written permission from the copyright holder.
+- The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
