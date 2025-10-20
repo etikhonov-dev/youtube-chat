@@ -9,6 +9,8 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import readline from "readline";
 import { Innertube } from "youtubei.js";
+import clipboardy from "clipboardy";
+import fs from "fs/promises";
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -23,6 +25,7 @@ const youtubeUrl = args[0];
 // Global variables to store video data
 let vectorStore;
 let videoMetadata = {};
+let conversationHistory = [];
 
 // Extract video ID from YouTube URL
 function extractVideoId(url) {
@@ -179,6 +182,95 @@ async function createAgent() {
   return agent;
 }
 
+// Format conversation history for export
+function formatConversationForExport() {
+  const now = new Date();
+  const dateStr = now.toLocaleString();
+
+  let output = `YouTube Chat Conversation Export\n`;
+  output += `${"=".repeat(60)}\n\n`;
+  output += `Video: ${videoMetadata.title}\n`;
+  output += `Author: ${videoMetadata.author}\n`;
+  output += `URL: ${youtubeUrl}\n`;
+  output += `Duration: ${formatTimestamp(videoMetadata.duration)}\n`;
+  output += `Export Date: ${dateStr}\n\n`;
+  output += `${"=".repeat(60)}\n\n`;
+
+  if (conversationHistory.length === 0) {
+    output += "No conversation history available.\n";
+    return output;
+  }
+
+  for (const entry of conversationHistory) {
+    const timeStr = entry.timestamp.toLocaleTimeString();
+    const role = entry.role === "user" ? "You" : "Assistant";
+    output += `[${timeStr}] ${role}: ${entry.content}\n\n`;
+  }
+
+  return output;
+}
+
+// Export conversation to clipboard
+async function exportToClipboard() {
+  try {
+    const content = formatConversationForExport();
+    await clipboardy.write(content);
+    console.log("\n✅ Conversation copied to clipboard!\n");
+  } catch (error) {
+    console.error(`\n❌ Failed to copy to clipboard: ${error.message}\n`);
+  }
+}
+
+// Export conversation to file
+async function exportToFile(rl) {
+  return new Promise((resolve) => {
+    const now = new Date();
+    const dateStr = now.toISOString().replace(/[:.]/g, "-").split("T")[0];
+    const timeStr = now.toTimeString().split(" ")[0].replace(/:/g, "-");
+    const defaultFilename = `conversation-${dateStr}-${timeStr}.txt`;
+
+    rl.question(`Enter filename (default: ${defaultFilename}): `, async (input) => {
+      const filename = input.trim() || defaultFilename;
+
+      try {
+        const content = formatConversationForExport();
+        await fs.writeFile(filename, content, "utf-8");
+        console.log(`\n✅ Conversation saved to: ${filename}\n`);
+      } catch (error) {
+        console.error(`\n❌ Failed to save file: ${error.message}\n`);
+      }
+
+      resolve();
+    });
+  });
+}
+
+// Handle export command
+async function handleExportCommand(rl) {
+  console.log("\n" + "=".repeat(60));
+  console.log("Export Conversation");
+  console.log("=".repeat(60));
+  console.log("\nSelect export method:\n");
+  console.log("1. Copy to clipboard   Copy the conversation to your system clipboard");
+  console.log("2. Save to file        Save the conversation to a file in the current directory\n");
+
+  return new Promise((resolve) => {
+    rl.question("Enter your choice (1 or 2): ", async (choice) => {
+      const selectedChoice = choice.trim();
+
+      if (selectedChoice === "1") {
+        await exportToClipboard();
+      } else if (selectedChoice === "2") {
+        await exportToFile(rl);
+      } else {
+        console.log("\n❌ Invalid choice. Please enter 1 or 2.\n");
+      }
+
+      resolve();
+    });
+  });
+}
+
 // Generate timestamped summary of main topics
 async function generateSummary(agent) {
   console.log("\n🔄 Generating summary...\n");
@@ -222,6 +314,7 @@ async function startChat(agent) {
   console.log("\n" + "=".repeat(60));
   console.log("💬 Chat started! Ask questions about the video.");
   console.log("Type 'exit', 'quit', or press Ctrl+C to end the session.");
+  console.log("Type '/export' to export the conversation.");
   console.log("=".repeat(60) + "\n");
 
   const askQuestion = () => {
@@ -240,7 +333,21 @@ async function startChat(agent) {
         return;
       }
 
+      // Handle /export command
+      if (userInput.toLowerCase() === "/export") {
+        await handleExportCommand(rl);
+        askQuestion();
+        return;
+      }
+
       try {
+        // Store user message in history
+        conversationHistory.push({
+          timestamp: new Date(),
+          role: "user",
+          content: userInput,
+        });
+
         console.log("\n🤔 Thinking...\n");
 
         const response = await agent.invoke({
@@ -250,6 +357,13 @@ async function startChat(agent) {
         // Extract the final message from the agent's response
         const messages = response.messages;
         const lastMessage = messages[messages.length - 1];
+
+        // Store assistant response in history
+        conversationHistory.push({
+          timestamp: new Date(),
+          role: "assistant",
+          content: lastMessage.content,
+        });
 
         console.log(`Assistant: ${lastMessage.content}\n`);
       } catch (error) {
