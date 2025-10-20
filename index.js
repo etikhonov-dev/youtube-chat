@@ -179,6 +179,39 @@ async function createAgent() {
   return agent;
 }
 
+// Generate timestamped summary of main topics
+async function generateSummary(agent) {
+  console.log("\n🔄 Generating summary...\n");
+
+  const summaryPrompt = `Based on the video "${videoMetadata.title}", what are the main topics covered?
+
+Please format your response EXACTLY like this:
+
+What are the main topics covered?
+
+Based on the video "${videoMetadata.title}", the main topics are:
+
+1. [Topic Name] [MM:SS - MM:SS]
+2. [Topic Name] [MM:SS - MM:SS]
+3. [Topic Name] [MM:SS - MM:SS]
+
+Search the transcript thoroughly to identify 5-8 main topics with their timestamp ranges. Be specific about what each topic covers.`;
+
+  try {
+    const response = await agent.invoke({
+      messages: [{ role: "user", content: summaryPrompt }],
+    });
+
+    const messages = response.messages;
+    const lastMessage = messages[messages.length - 1];
+
+    console.log(lastMessage.content);
+    console.log("\n" + "=".repeat(60));
+  } catch (error) {
+    console.error(`\n❌ Error generating summary: ${error.message}\n`);
+  }
+}
+
 // Start the interactive chat session
 async function startChat(agent) {
   const rl = readline.createInterface({
@@ -235,6 +268,7 @@ async function startChat(agent) {
   try {
     await initialize();
     const agent = await createAgent();
+    await generateSummary(agent);
     await startChat(agent);
   } catch (error) {
     console.error("\n❌ Error:", error.message);
