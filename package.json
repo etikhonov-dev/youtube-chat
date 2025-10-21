@@ -2,6 +2,7 @@
   "name": "youtube-chat",
   "version": "1.0.0",
   "description": "LangChain conversational agent for YouTube videos",
+  "license": "SEE LICENSE IN LICENSE",
   "type": "module",
   "main": "index.js",
   "bin": {
