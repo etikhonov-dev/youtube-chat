@@ -29,14 +29,19 @@ let conversationHistory = [];
 
 // Extract video ID from YouTube URL
 function extractVideoId(url) {
+  url = url.trim();
+
   const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+    /^(?:https?:\/\/)?(?:www\.)?(?:youtube\.com|youtu\.be|youtube-nocookie\.com)(?:.*[?&]v=|\/embed\/|\/v\/|\/e\/|\/shorts\/|\/live\/|\/attribution_link?.*v=|\/oembed\?url=.*v=|\/)?([a-zA-Z0-9_-]{11})/,
     /^([a-zA-Z0-9_-]{11})$/
   ];
 
   for (const pattern of patterns) {
     const match = url.match(pattern);
-    if (match) return match[1];
+    if (match) {
+      console.log("Captured video ID:", match[1]);
+      return match[1];
+    }
   }
 
   throw new Error("Invalid YouTube URL format");
