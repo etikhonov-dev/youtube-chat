@@ -26,12 +26,12 @@ Chat with any YouTube video using AI. Ask questions, explore topics, and get ins
 
 2. Install dependencies:
    ```bash
-   npm install
+   yarn install
    ```
 
 3. Link the package globally:
    ```bash
-   npm link
+   yarn link
    ```
 
 4. Set up your Google API key:

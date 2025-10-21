@@ -12,12 +12,12 @@ import { Innertube } from "youtubei.js";
 import clipboardy from "clipboardy";
 import fs from "fs/promises";
 
-// Suppress [YOUTUBEJS][Parser] ParsingError warnings
+// Suppress [YOUTUBEJS][Parser] and [YOUTUBEJS][Text] warnings
 const originalConsoleWarn = console.warn;
 console.warn = (...args) => {
   const message = args.join(" ");
-  if (message.includes("[YOUTUBEJS][Parser]")) {
-    return; // Ignore this warning
+  if (message.includes("[YOUTUBEJS][Parser]") || message.includes("[YOUTUBEJS][Text]")) {
+    return; // Ignore these warnings
   }
   originalConsoleWarn.apply(console, args);
 };
