@@ -6,7 +6,7 @@
   "type": "module",
   "main": "index.js",
   "bin": {
-    "ytchat": "./index.js"
+    "youtube-chat": "./index.js"
   },
   "scripts": {
     "start": "node index.js"
