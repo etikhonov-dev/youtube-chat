@@ -1,14 +1,14 @@
-# YouTube Chat - LangChain Conversational Agent
+# YouTube Chat
 
-A conversational AI agent that lets you chat with YouTube videos using LangChain, Google Gemini 2.0 Flash, and vector embeddings.
+Chat with any YouTube video using AI. Ask questions, explore topics, and get instant answers from video transcripts.
 
-## Features
+## What You Can Do
 
-- **Intelligent Q&A**: Ask questions about any YouTube video with captions
-- **Timestamp References**: Get answers with precise timestamps showing where information appears in the video
-- **Conversational Memory**: The agent remembers context from previous questions in the same session
-- **Agent with Tools**: Uses ReAct agent pattern to intelligently search and reason about video content
-- **In-Memory Vector Store**: Fast semantic search without external dependencies
+- **Chat with any YouTube video** that has transcripts/captions available
+- **Get main topics covered** automatically when you start
+- **Ask follow-up questions** and have natural conversations about the content
+- **Export conversations** to clipboard or save to a file for later reference
+- Get answers with **precise timestamps** showing where information appears in the video
 
 ## Prerequisites
 
@@ -41,92 +41,56 @@ A conversational AI agent that lets you chat with YouTube videos using LangChain
 
 ## Usage
 
-### Basic Usage
-
-```bash
-ytchat <youtube-url>
-```
-
-### Example
+Start chatting with any YouTube video:
 
 ```bash
 ytchat https://youtu.be/bZQun8Y4L2A
 ```
 
-### Interactive Session
+### What Happens Next
 
-Once started, you'll see:
-- Video metadata (title, author, duration)
-- Processing status
-- Interactive prompt for questions
+1. **Video loads** - You'll see the title, author, and duration
+2. **Topics summary** - Main topics covered in the video are automatically generated
+3. **Chat begins** - Ask any questions about the video content
 
-Example conversation:
+### Example Conversation
+
 ```
 You: What is this video about?
-Assistant: [Answer with timestamps]
+Assistant: [Answer with relevant timestamps]
 
-You: What does he say about X?
-Assistant: [Detailed answer with source timestamps]
+You: Can you tell me more about [specific topic]?
+Assistant: [Detailed explanation with timestamps]
 
-You: Tell me more about that
-Assistant: [Contextual follow-up using conversation memory]
-
-You: exit
+You: What are the key takeaways?
+Assistant: [Summary with references to video sections]
 ```
 
-## How It Works
+### Export Your Conversation
 
-### Architecture
+Save your conversation for later reference:
 
-1. **YouTube Loader**: Fetches video transcript with timestamps
-2. **Text Splitter**: Chunks transcript into 1000-character segments with overlap
-3. **Embeddings**: Uses Google's text-embedding-004 model
-4. **Vector Store**: In-memory MemoryVectorStore for fast semantic search
-5. **Agent**: ReAct agent with two tools:
-   - `search_transcript`: Semantic search across video content
-   - `get_video_info`: Retrieves video metadata
-6. **LLM**: Gemini 2.0 Flash for reasoning and generation
-7. **Memory**: ConversationBufferMemory for context retention
-
-### Agent Tools
-
-**search_transcript**
-- Searches video transcript using semantic similarity
-- Returns relevant sections with timestamps
-- Configurable number of results
-
-**get_video_info**
-- Returns video title, author, duration, description
-- Used when asking about the video itself
-
-## Configuration
-
-### Customization Options
-
-Edit `index.js` to adjust:
-
-**Agent Parameters** (line 139-145):
-```javascript
-const llm = new ChatGoogleGenerativeAI({
-  model: "gemini-2.0-flash-001",
-  // temperature: 0,          // 0 = deterministic, 1 = creative
-  maxRetries: 2,
-});
+```
+You: /export
 ```
 
-**Search Results** (line 108-111):
-```javascript
-func: async ({ query, numResults = 4 }) => {
-  // Change default from 4 to get more/fewer results
-```
+Choose to either:
+- **Copy to clipboard** - Paste into any document
+- **Save to file** - Creates a timestamped text file in your current directory
 
-## Tips
+### Commands
 
-- Videos must have captions/subtitles available
-- Longer videos take more time to process initially
-- Be specific in your questions for better results
-- Use follow-up questions to dig deeper on topics
-- The agent uses timestamps automatically when relevant
+- `exit` or `quit` - End the chat session
+- `/export` - Export conversation to clipboard or file
+- `Ctrl+C` - Quick exit
+
+## Tips for Best Results
+
+- **Videos must have captions** - The video needs transcripts/subtitles available
+- **Be specific** - Clear questions get better answers
+- **Follow up** - Ask for more details or clarification on any topic
+- **Use the summary** - Review the auto-generated topics first to understand what's covered
+- **Export often** - Save interesting conversations for later reference
 
 ## Troubleshooting
 
