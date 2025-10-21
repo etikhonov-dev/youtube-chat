@@ -11,6 +11,7 @@ import readline from "readline";
 import { Innertube } from "youtubei.js";
 import clipboardy from "clipboardy";
 import fs from "fs/promises";
+import getUserLocale from "get-user-locale";
 
 // Suppress [YOUTUBEJS][Parser] and [YOUTUBEJS][Text] warnings
 const originalConsoleWarn = console.warn;
@@ -206,11 +207,15 @@ async function initialize() {
   // Extract video ID using our robust pattern (handles /live/, /shorts/, etc.)
   const videoId = extractVideoId(youtubeUrl);
 
+  // Get user's locale and extract language code (e.g., "en-US" -> "en")
+  const userLocale = getUserLocale();
+  const language = userLocale ? userLocale.split("-")[0] : "en";
+
   // Load YouTube transcript with metadata - using videoId directly
   // instead of createFromUrl to bypass LangChain's limited URL parser
   const loader = new YoutubeLoader({
     videoId: videoId,
-    language: "en",
+    language: language,
     addVideoInfo: true,
   });
 
@@ -256,6 +261,9 @@ async function initialize() {
 
   // Create vector store
   vectorStore = await MemoryVectorStore.fromDocuments(splits, embeddings);
+
+  // Return language information for agent configuration
+  return { language, userLocale };
 }
 
 // Tool: Search the video transcript
@@ -306,7 +314,7 @@ Description: ${videoMetadata.description}`;
 });
 
 // Create the conversational agent
-async function createAgent() {
+async function createAgent(language, userLocale) {
   const llm = new ChatGoogleGenerativeAI({
     model: "gemini-2.0-flash-001",
     // temperature: 0,
@@ -316,10 +324,52 @@ async function createAgent() {
   // Create tools array
   const tools = [searchTranscriptTool, getVideoInfoTool];
 
+  // Create system prompt that instructs the AI to respond in user's language
+  const languageNames = {
+    'en': 'English',
+    'es': 'Spanish',
+    'fr': 'French',
+    'de': 'German',
+    'it': 'Italian',
+    'pt': 'Portuguese',
+    'ru': 'Russian',
+    'ja': 'Japanese',
+    'ko': 'Korean',
+    'zh': 'Chinese',
+    'ar': 'Arabic',
+    'hi': 'Hindi',
+    'nl': 'Dutch',
+    'pl': 'Polish',
+    'tr': 'Turkish',
+    'vi': 'Vietnamese',
+    'th': 'Thai',
+    'sv': 'Swedish',
+    'da': 'Danish',
+    'fi': 'Finnish',
+    'no': 'Norwegian',
+    'cs': 'Czech',
+    'uk': 'Ukrainian',
+  };
+
+  const languageName = languageNames[language] || language.toUpperCase();
+
+  const systemPrompt = `You are a helpful assistant that answers questions about a YouTube video based on its transcript.
+
+IMPORTANT: The user's locale is "${userLocale}" and they speak ${languageName}.
+You MUST respond in ${languageName}.
+Always provide your answers in ${languageName} to match the user's language preference.
+
+When answering questions:
+- Search the transcript to find relevant information
+- Provide specific details and examples when possible
+- If you can't find information in the transcript, say so
+- Respond naturally and conversationally in ${languageName}`;
+
   // Create the agent graph with LangGraph
   const agent = createReactAgent({
     llm,
     tools,
+    messageModifier: systemPrompt,
   });
 
   return agent;
@@ -523,8 +573,8 @@ async function startChat(agent) {
 // Main execution
 (async () => {
   try {
-    await initialize();
-    const agent = await createAgent();
+    const { language, userLocale } = await initialize();
+    const agent = await createAgent(language, userLocale);
     await generateSummary(agent);
     await startChat(agent);
   } catch (error) {
