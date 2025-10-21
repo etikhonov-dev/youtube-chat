@@ -39,7 +39,7 @@ function extractVideoId(url) {
   for (const pattern of patterns) {
     const match = url.match(pattern);
     if (match) {
-      console.log("Captured video ID:", match[1]);
+      // console.log("Captured video ID:", match[1]);
       return match[1];
     }
   }
@@ -193,8 +193,13 @@ class SemanticChunker {
 async function initialize() {
   console.log("\n🔄 Loading YouTube video transcript...");
 
-  // Load YouTube transcript with metadata
-  const loader = YoutubeLoader.createFromUrl(youtubeUrl, {
+  // Extract video ID using our robust pattern (handles /live/, /shorts/, etc.)
+  const videoId = extractVideoId(youtubeUrl);
+
+  // Load YouTube transcript with metadata - using videoId directly
+  // instead of createFromUrl to bypass LangChain's limited URL parser
+  const loader = new YoutubeLoader({
+    videoId: videoId,
     language: "en",
     addVideoInfo: true,
   });
@@ -208,7 +213,6 @@ async function initialize() {
   // Fetch video duration using youtubei.js
   let duration = 0;
   try {
-    const videoId = extractVideoId(youtubeUrl);
     const youtube = await Innertube.create();
     const info = await youtube.getInfo(videoId);
     duration = info.basic_info.duration || 0;
