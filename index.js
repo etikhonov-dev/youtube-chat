@@ -679,6 +679,13 @@ Search the transcript thoroughly to identify 5-8 main topics. Be specific about 
 
     console.log(lastMessage.content);
     console.log("\n" + "=".repeat(60));
+
+    // Store the summary in conversation history so it's included in exports
+    conversationHistory.push({
+      timestamp: new Date(),
+      role: "assistant",
+      content: lastMessage.content,
+    });
   } catch (error) {
     console.error(`\n❌ Error generating summary: ${error.message}\n`);
   }
@@ -746,11 +753,12 @@ async function startChat(agent) {
         const messages = response.messages;
         const lastMessage = messages[messages.length - 1];
 
-        // Store assistant response in history
+        // Store assistant response in history with full message chain
         conversationHistory.push({
           timestamp: new Date(),
           role: "assistant",
           content: lastMessage.content,
+          fullMessages: messages, // Store all messages including tool calls and reasoning
         });
 
         console.log(`Assistant: ${lastMessage.content}\n`);
