@@ -102,11 +102,6 @@ Choose to either:
 - Ensure GOOGLE_API_KEY is set correctly
 - Check your API key is valid at https://aistudio.google.com/
 
-**Slow responses**
-- First initialization takes time (loading + embedding)
-- Subsequent questions should be faster
-- Consider reducing chunk size for shorter videos
-
 ## License
 
 This project is licensed for **non-commercial use only**.
