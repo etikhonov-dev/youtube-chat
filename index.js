@@ -11,9 +11,9 @@ import readline from "readline";
 import { Innertube } from "youtubei.js";
 import clipboardy from "clipboardy";
 import fs from "fs/promises";
-import getUserLocale from "get-user-locale";
 import os from "os";
 import path from "path";
+import { getMessage, getLanguageName, detectLocale, getLanguageEntries } from "./localization.js";
 
 // Suppress [YOUTUBEJS][Parser] and [YOUTUBEJS][Text] warnings
 const originalConsoleWarn = console.warn;
@@ -28,32 +28,25 @@ console.warn = (...args) => {
 // Parse command line arguments
 const args = process.argv.slice(2);
 
-// Extract language override if provided (--lang=es or --locale=es-ES)
-let languageOverride = null;
-const filteredArgs = args.filter(arg => {
-  if (arg.startsWith('--lang=') || arg.startsWith('--locale=')) {
-    languageOverride = arg.split('=')[1];
-    return false; // Remove from args
-  }
-  return true;
-});
+if (args.length === 0) {
+  // Get user's locale for showing localized usage message
+  const config = await loadConfig();
+  const { locale } = detectLocale(config);
 
-if (filteredArgs.length === 0) {
-  console.log("Usage: node index.js <youtube-url> [--lang=<language>]");
-  console.log("\nExamples:");
-  console.log("  node index.js https://youtu.be/bZQun8Y4L2A");
-  console.log("  node index.js https://youtu.be/bZQun8Y4L2A --lang=es");
-  console.log("  node index.js https://youtu.be/bZQun8Y4L2A --locale=fr-FR");
-  console.log("\nSupported languages: en, es, fr, de, it, pt, ru, ja, ko, zh, ar, hi, and more");
+  console.log(getMessage('usage_header', locale));
+  console.log(getMessage('usage_examples', locale));
+  console.log(getMessage('usage_example_1', locale));
+  console.log(getMessage('usage_note', locale));
   process.exit(1);
 }
 
-const youtubeUrl = filteredArgs[0];
+const youtubeUrl = args[0];
 
-// Global variables to store video data
+// Global variables to store video data and user locale
 let vectorStore;
 let videoMetadata = {};
 let conversationHistory = [];
+let currentLocale = 'en'; // Will be set during initialization
 
 // Extract video ID from YouTube URL
 function extractVideoId(url) {
@@ -67,12 +60,11 @@ function extractVideoId(url) {
   for (const pattern of patterns) {
     const match = url.match(pattern);
     if (match) {
-      // console.log("Captured video ID:", match[1]);
       return match[1];
     }
   }
 
-  throw new Error("Invalid YouTube URL format");
+  throw new Error(getMessage('error_invalid_url', currentLocale));
 }
 
 // Format timestamp from seconds to MM:SS or HH:MM:SS
@@ -103,42 +95,15 @@ async function loadConfig() {
 }
 
 // Save config to file
-async function saveConfig(config) {
+async function saveConfig(config, locale) {
   try {
     await fs.writeFile(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8');
     return true;
   } catch (error) {
-    console.error(`\n❌ Failed to save config: ${error.message}\n`);
+    console.error(`\n${getMessage('error_save_config', locale, { error: error.message })}\n`);
     return false;
   }
 }
-
-// Available languages
-const LANGUAGE_NAMES = {
-  'en': 'English',
-  'es': 'Spanish',
-  'fr': 'French',
-  'de': 'German',
-  'it': 'Italian',
-  'pt': 'Portuguese',
-  'ru': 'Russian',
-  'ja': 'Japanese',
-  'ko': 'Korean',
-  'zh': 'Chinese',
-  'ar': 'Arabic',
-  'hi': 'Hindi',
-  'nl': 'Dutch',
-  'pl': 'Polish',
-  'tr': 'Turkish',
-  'vi': 'Vietnamese',
-  'th': 'Thai',
-  'sv': 'Swedish',
-  'da': 'Danish',
-  'fi': 'Finnish',
-  'no': 'Norwegian',
-  'cs': 'Czech',
-  'uk': 'Ukrainian',
-};
 
 // SemanticChunker - splits text based on semantic similarity
 class SemanticChunker {
@@ -165,7 +130,6 @@ class SemanticChunker {
     }
 
     if (this.breakpointThresholdType === "percentile") {
-      // Use 95th percentile as default
       const sorted = [...distances].sort((a, b) => a - b);
       const index = Math.floor(sorted.length * 0.95);
       return sorted[index];
@@ -184,21 +148,18 @@ class SemanticChunker {
       return q3 + 1.5 * iqr;
     }
 
-    // Default to percentile
     const sorted = [...distances].sort((a, b) => a - b);
     const index = Math.floor(sorted.length * 0.95);
     return sorted[index];
   }
 
   async splitText(text) {
-    // Split into sentences
     const sentences = text.split(this.sentenceSplitRegex).filter(s => s.trim().length > 0);
 
     if (sentences.length <= 1) {
       return [text];
     }
 
-    // Group sentences into buffers
     const groups = [];
     for (let i = 0; i < sentences.length; i += this.bufferSize) {
       const group = sentences.slice(i, i + this.bufferSize).join(" ");
@@ -209,10 +170,8 @@ class SemanticChunker {
       return [text];
     }
 
-    // Get embeddings for each group
     const embeddings = await this.embeddings.embedDocuments(groups);
 
-    // Calculate distances between consecutive embeddings
     const distances = [];
     for (let i = 0; i < embeddings.length - 1; i++) {
       const distance = this.cosineDistance(embeddings[i], embeddings[i + 1]);
@@ -223,10 +182,8 @@ class SemanticChunker {
       return [text];
     }
 
-    // Calculate threshold
     const threshold = this.calculateBreakpointThreshold(distances);
 
-    // Find breakpoints
     const breakpoints = [0];
     for (let i = 0; i < distances.length; i++) {
       if (distances[i] > threshold) {
@@ -235,7 +192,6 @@ class SemanticChunker {
     }
     breakpoints.push(groups.length);
 
-    // Create chunks based on breakpoints
     const chunks = [];
     for (let i = 0; i < breakpoints.length - 1; i++) {
       const start = breakpoints[i];
@@ -270,53 +226,39 @@ class SemanticChunker {
 }
 
 // Initialize the system
-async function initialize(localeOverride = null) {
-  console.log("\n🔄 Loading YouTube video transcript...");
+async function initialize(config) {
+  // Detect locale from config or system
+  const { language, locale: userLocale } = detectLocale(config);
+  currentLocale = userLocale; // Set global locale for error messages
 
-  // Extract video ID using our robust pattern (handles /live/, /shorts/, etc.)
+  console.log(`\n${getMessage('loading_transcript', userLocale)}`);
+
+  // Extract video ID using our robust pattern
   const videoId = extractVideoId(youtubeUrl);
 
-  // Get user's locale and extract language code (e.g., "en-US" -> "en")
-  // Use override if provided, otherwise detect from system
-  let userLocale, language;
-
-  if (localeOverride) {
-    // Handle both "es" and "es-ES" formats
-    if (localeOverride.includes('-')) {
-      userLocale = localeOverride;
-      language = localeOverride.split("-")[0];
-    } else {
-      language = localeOverride;
-      userLocale = localeOverride; // Use language code as locale if no full locale provided
-    }
-    console.log(`🌐 Language override: ${language} (${userLocale})`);
-  } else {
-    userLocale = getUserLocale();
-    language = userLocale ? userLocale.split("-")[0] : "en";
-    console.log(`🌐 Detected locale: ${userLocale}`);
-  }
-
-  // Load YouTube transcript with metadata - using videoId directly
-  // instead of createFromUrl to bypass LangChain's limited URL parser
-  // Try requested language first, fallback to English if not available
+  // Load YouTube transcript
   let docs;
   let actualLanguage = language;
+
+  // Check if user prefers accurate English transcript
+  const preferEnglish = config.preferAccurateTranscript === true;
+  const transcriptLanguage = preferEnglish ? 'en' : language;
 
   try {
     const loader = new YoutubeLoader({
       videoId: videoId,
-      language: language,
+      language: transcriptLanguage,
       addVideoInfo: true,
     });
     docs = await loader.load();
+    actualLanguage = transcriptLanguage;
 
     if (!docs || docs.length === 0) {
       throw new Error("No transcript found");
     }
   } catch (error) {
-    // If requested language failed and it's not English, try English
-    if (language !== 'en') {
-      console.log(`⚠️  ${language.toUpperCase()} transcript not available, falling back to English`);
+    if (transcriptLanguage !== 'en') {
+      console.log(getMessage('transcript_fallback', userLocale, { language: transcriptLanguage.toUpperCase() }));
       try {
         const loaderEn = new YoutubeLoader({
           videoId: videoId,
@@ -327,26 +269,24 @@ async function initialize(localeOverride = null) {
         actualLanguage = 'en';
 
         if (!docs || docs.length === 0) {
-          throw new Error("No English transcript found either");
+          throw new Error(getMessage('error_no_transcript_any', userLocale));
         }
       } catch (fallbackError) {
-        throw new Error("Failed to load transcript. Video may not have captions available in any language.");
+        throw new Error(getMessage('error_no_transcript_any', userLocale));
       }
     } else {
-      throw new Error("Failed to load transcript. Video may not have captions available.");
+      throw new Error(getMessage('error_no_transcript', userLocale));
     }
   }
 
-  console.log(`📝 Transcript language: ${actualLanguage.toUpperCase()}`);
-
-  // Fetch video duration using youtubei.js
+  // Fetch video duration
   let duration = 0;
   try {
     const youtube = await Innertube.create();
     const info = await youtube.getInfo(videoId);
     duration = info.basic_info.duration || 0;
   } catch (error) {
-    console.warn("⚠️  Could not fetch video duration:", error.message);
+    console.warn(getMessage('video_duration_warning', userLocale, { error: error.message }));
   }
 
   // Store video metadata
@@ -357,27 +297,23 @@ async function initialize(localeOverride = null) {
     duration: duration,
   };
 
-  console.log(`📹 Video: ${videoMetadata.title}`);
-  console.log(`👤 Author: ${videoMetadata.author}`);
-  console.log(`⏱️  Duration: ${formatTimestamp(videoMetadata.duration)}`);
+  console.log(getMessage('video_info_title', userLocale, { title: videoMetadata.title }));
+  console.log(getMessage('video_info_author', userLocale, { author: videoMetadata.author }));
+  console.log(getMessage('video_info_duration', userLocale, { duration: formatTimestamp(videoMetadata.duration) }));
 
-  // Create embeddings model first (needed for semantic chunking)
+  // Create embeddings and vector store
   const embeddings = new GoogleGenerativeAIEmbeddings({
     model: "text-embedding-004",
   });
 
-  // Split the transcript into semantic chunks
   const textSplitter = new SemanticChunker(embeddings, {
     breakpointThresholdType: "percentile",
   });
 
   const splits = await textSplitter.splitDocuments(docs);
-
-  // Create vector store
   vectorStore = await MemoryVectorStore.fromDocuments(splits, embeddings);
 
-  // Return language information for agent configuration
-  return { language, userLocale };
+  return { language, userLocale, transcriptLanguage: actualLanguage };
 }
 
 // Tool: Search the video transcript
@@ -401,11 +337,7 @@ const searchTranscriptTool = new DynamicStructuredTool({
   },
   func: async ({ query, numResults = 4 }) => {
     const results = await vectorStore.similaritySearch(query, numResults);
-
-    const formattedResults = results.map((doc) => {
-      return doc.pageContent;
-    }).join("\n\n");
-
+    const formattedResults = results.map((doc) => doc.pageContent).join("\n\n");
     return formattedResults || "No relevant information found.";
   },
 });
@@ -413,7 +345,7 @@ const searchTranscriptTool = new DynamicStructuredTool({
 // Tool: Get video information
 const getVideoInfoTool = new DynamicStructuredTool({
   name: "get_video_info",
-  description: "Gets metadata about the video including title, author, description, and duration. Use this when the user asks about the video itself (who made it, how long it is, what it's about).",
+  description: "Gets metadata about the video including title, author, description, and duration.",
   schema: {
     type: "object",
     properties: {},
@@ -431,55 +363,17 @@ Description: ${videoMetadata.description}`;
 async function createAgent(language, userLocale) {
   const llm = new ChatGoogleGenerativeAI({
     model: "gemini-2.0-flash-001",
-    // temperature: 0,
     maxRetries: 2,
   });
 
-  // Create tools array
   const tools = [searchTranscriptTool, getVideoInfoTool];
 
-  // Create system prompt that instructs the AI to respond in user's language
-  const languageNames = {
-    'en': 'English',
-    'es': 'Spanish',
-    'fr': 'French',
-    'de': 'German',
-    'it': 'Italian',
-    'pt': 'Portuguese',
-    'ru': 'Russian',
-    'ja': 'Japanese',
-    'ko': 'Korean',
-    'zh': 'Chinese',
-    'ar': 'Arabic',
-    'hi': 'Hindi',
-    'nl': 'Dutch',
-    'pl': 'Polish',
-    'tr': 'Turkish',
-    'vi': 'Vietnamese',
-    'th': 'Thai',
-    'sv': 'Swedish',
-    'da': 'Danish',
-    'fi': 'Finnish',
-    'no': 'Norwegian',
-    'cs': 'Czech',
-    'uk': 'Ukrainian',
-  };
+  // Build system prompt using localization
+  const languageName = getLanguageName(language);
+  const systemPrompt = getMessage('system_prompt_intro', userLocale) +
+                      getMessage('system_prompt_language', userLocale, { locale: userLocale, languageName }) +
+                      getMessage('system_prompt_instructions', userLocale, { languageName });
 
-  const languageName = languageNames[language] || language.toUpperCase();
-
-  const systemPrompt = `You are a helpful assistant that answers questions about a YouTube video based on its transcript.
-
-IMPORTANT: The user's locale is "${userLocale}" and they speak ${languageName}.
-You MUST respond in ${languageName}.
-Always provide your answers in ${languageName} to match the user's language preference.
-
-When answering questions:
-- Search the transcript to find relevant information
-- Provide specific details and examples when possible
-- If you can't find information in the transcript, say so
-- Respond naturally and conversationally in ${languageName}`;
-
-  // Create the agent graph with LangGraph
   const agent = createReactAgent({
     llm,
     tools,
@@ -490,11 +384,11 @@ When answering questions:
 }
 
 // Format conversation history for export
-function formatConversationForExport() {
+function formatConversationForExport(locale) {
   const now = new Date();
   const dateStr = now.toLocaleString();
 
-  let output = `YouTube Chat Conversation Export\n`;
+  let output = `${getMessage('export_title', locale)}\n`;
   output += `${"=".repeat(60)}\n\n`;
   output += `Video: ${videoMetadata.title}\n`;
   output += `Author: ${videoMetadata.author}\n`;
@@ -504,13 +398,13 @@ function formatConversationForExport() {
   output += `${"=".repeat(60)}\n\n`;
 
   if (conversationHistory.length === 0) {
-    output += "No conversation history available.\n";
+    output += getMessage('export_no_history', locale) + "\n";
     return output;
   }
 
   for (const entry of conversationHistory) {
     const timeStr = entry.timestamp.toLocaleTimeString();
-    const role = entry.role === "user" ? "You" : "Assistant";
+    const role = entry.role === "user" ? getMessage('role_you', locale) : getMessage('role_assistant', locale);
     output += `[${timeStr}] ${role}: ${entry.content}\n\n`;
   }
 
@@ -518,33 +412,34 @@ function formatConversationForExport() {
 }
 
 // Export conversation to clipboard
-async function exportToClipboard() {
+async function exportToClipboard(locale) {
   try {
-    const content = formatConversationForExport();
+    const content = formatConversationForExport(locale);
     await clipboardy.write(content);
-    console.log("\n✅ Conversation copied to clipboard!\n");
+    console.log(`\n${getMessage('export_clipboard_success', locale)}\n`);
   } catch (error) {
-    console.error(`\n❌ Failed to copy to clipboard: ${error.message}\n`);
+    console.error(`\n${getMessage('error_clipboard_copy', locale, { error: error.message })}\n`);
   }
 }
 
 // Export conversation to file
-async function exportToFile(rl) {
+async function exportToFile(rl, locale) {
   return new Promise((resolve) => {
     const now = new Date();
     const dateStr = now.toISOString().replace(/[:.]/g, "-").split("T")[0];
     const timeStr = now.toTimeString().split(" ")[0].replace(/:/g, "-");
     const defaultFilename = `conversation-${dateStr}-${timeStr}.txt`;
 
-    rl.question(`Enter filename (default: ${defaultFilename}): `, async (input) => {
+    const prompt = getMessage('export_file_prompt', locale, { filename: defaultFilename });
+    rl.question(prompt, async (input) => {
       const filename = input.trim() || defaultFilename;
 
       try {
-        const content = formatConversationForExport();
+        const content = formatConversationForExport(locale);
         await fs.writeFile(filename, content, "utf-8");
-        console.log(`\n✅ Conversation saved to: ${filename}\n`);
+        console.log(`\n${getMessage('export_file_success', locale, { filename })}\n`);
       } catch (error) {
-        console.error(`\n❌ Failed to save file: ${error.message}\n`);
+        console.error(`\n${getMessage('error_file_save', locale, { error: error.message })}\n`);
       }
 
       resolve();
@@ -553,24 +448,24 @@ async function exportToFile(rl) {
 }
 
 // Handle export command
-async function handleExportCommand(rl) {
+async function handleExportCommand(rl, locale) {
   console.log("\n" + "=".repeat(60));
-  console.log("Export Conversation");
+  console.log(getMessage('export_header', locale));
   console.log("=".repeat(60));
-  console.log("\nSelect export method:\n");
-  console.log("1. Copy to clipboard   Copy the conversation to your system clipboard");
-  console.log("2. Save to file        Save the conversation to a file in the current directory\n");
+  console.log(getMessage('export_select_method', locale));
+  console.log(getMessage('export_option_clipboard', locale));
+  console.log(getMessage('export_option_file', locale));
 
   return new Promise((resolve) => {
-    rl.question("Enter your choice (1 or 2): ", async (choice) => {
+    rl.question(getMessage('export_choice_prompt', locale), async (choice) => {
       const selectedChoice = choice.trim();
 
       if (selectedChoice === "1") {
-        await exportToClipboard();
+        await exportToClipboard(locale);
       } else if (selectedChoice === "2") {
-        await exportToFile(rl);
+        await exportToFile(rl, locale);
       } else {
-        console.log("\n❌ Invalid choice. Please enter 1 or 2.\n");
+        console.log(`\n${getMessage('export_invalid_choice', locale)}\n`);
       }
 
       resolve();
@@ -579,20 +474,22 @@ async function handleExportCommand(rl) {
 }
 
 // Handle language selection command
-async function handleLangCommand(rl) {
+async function handleLangCommand(rl, locale) {
   console.log("\n" + "=".repeat(60));
-  console.log("Language Settings");
+  console.log(getMessage('lang_header', locale));
   console.log("=".repeat(60));
 
-  // Load current config
   const config = await loadConfig();
   const currentLang = config.language || 'auto-detect';
+  const transcriptPref = config.preferAccurateTranscript ?
+    getMessage('lang_prefer_accurate', locale) :
+    getMessage('lang_prefer_native', locale);
 
-  console.log(`\nCurrent language: ${currentLang}`);
-  console.log("\nAvailable languages:\n");
+  console.log(getMessage('lang_current', locale, { language: currentLang }));
+  console.log(getMessage('lang_transcript_preference', locale, { preference: transcriptPref }));
+  console.log(getMessage('lang_available', locale));
 
-  // Create array of language entries for numbering
-  const langEntries = Object.entries(LANGUAGE_NAMES);
+  const langEntries = getLanguageEntries();
 
   // Display languages in two columns
   const halfLength = Math.ceil(langEntries.length / 2);
@@ -611,14 +508,16 @@ async function handleLangCommand(rl) {
     }
   }
 
-  console.log(`\n ${String(langEntries.length + 1).padStart(2, ' ')}. Auto-detect (use system locale)\n`);
+  const autoDetectOption = `\n ${String(langEntries.length + 1).padStart(2, ' ')}. ${getMessage('lang_auto_detect', locale)}\n`;
+  console.log(autoDetectOption);
 
   return new Promise((resolve) => {
-    rl.question(`Enter your choice (1-${langEntries.length + 1}): `, async (choice) => {
+    const prompt = getMessage('lang_choice_prompt', locale, { max: langEntries.length + 1 });
+    rl.question(prompt, async (choice) => {
       const selectedNum = parseInt(choice.trim(), 10);
 
       if (isNaN(selectedNum) || selectedNum < 1 || selectedNum > langEntries.length + 1) {
-        console.log(`\n❌ Invalid choice. Please enter a number between 1 and ${langEntries.length + 1}.\n`);
+        console.log(`\n${getMessage('lang_invalid_choice', locale, { max: langEntries.length + 1 })}\n`);
         resolve();
         return;
       }
@@ -626,42 +525,64 @@ async function handleLangCommand(rl) {
       let newLanguage, newLocale;
 
       if (selectedNum === langEntries.length + 1) {
-        // Auto-detect
         newLanguage = null;
         newLocale = null;
-        console.log("\n✅ Language set to auto-detect (system locale)");
+        console.log(`\n${getMessage('lang_set_auto', locale)}`);
       } else {
-        // Selected language
         const [code, name] = langEntries[selectedNum - 1];
         newLanguage = code;
         newLocale = code;
-        console.log(`\n✅ Language set to: ${name} (${code})`);
+        console.log(`\n${getMessage('lang_set_to', locale, { name, code })}`);
       }
 
-      // Save to config
-      const success = await saveConfig({ language: newLanguage, locale: newLocale });
+      // Ask about transcript preference
+      console.log(getMessage('lang_transcript_toggle_prompt', locale));
+      rl.question('', async (transcriptChoice) => {
+        const choice = transcriptChoice.trim();
+        let preferAccurateTranscript = config.preferAccurateTranscript || false;
 
-      if (success) {
-        console.log("💾 Settings saved to ~/.youtube-chat-config.json");
-        console.log("ℹ️  Changes will take effect when you load the next video\n");
-      }
+        if (choice === '1') {
+          preferAccurateTranscript = false;
+          console.log(`\n${getMessage('lang_transcript_set_native', locale)}`);
+        } else if (choice === '2') {
+          preferAccurateTranscript = true;
+          console.log(`\n${getMessage('lang_transcript_set_english', locale)}`);
+        }
+        // If empty/Enter pressed, keep current setting
 
-      resolve();
+        const newConfig = {
+          language: newLanguage,
+          locale: newLocale,
+          preferAccurateTranscript
+        };
+
+        const success = await saveConfig(newConfig, locale);
+
+        if (success) {
+          console.log(getMessage('lang_saved', locale));
+          console.log(getMessage('lang_effect_notice', locale) + '\n');
+        }
+
+        resolve();
+      });
     });
   });
 }
 
-// Generate timestamped summary of main topics
-async function generateSummary(agent) {
-  console.log("\n🔄 Generating summary...\n");
+// Generate summary of main topics
+async function generateSummary(agent, locale) {
+  console.log(`\n${getMessage('summary_generating', locale)}\n`);
+
+  const summaryQuestion = getMessage('summary_question', locale);
+  const summaryIntro = getMessage('summary_intro', locale, { title: videoMetadata.title });
 
   const summaryPrompt = `Based on the video "${videoMetadata.title}", what are the main topics covered?
 
 Please format your response EXACTLY like this:
 
-What are the main topics covered?
+${summaryQuestion}
 
-Based on the video "${videoMetadata.title}", the main topics are:
+${summaryIntro}
 
 1. [Topic Name]
 2. [Topic Name]
@@ -680,29 +601,31 @@ Search the transcript thoroughly to identify 5-8 main topics. Be specific about 
     console.log(lastMessage.content);
     console.log("\n" + "=".repeat(60));
 
-    // Store the summary in conversation history so it's included in exports
     conversationHistory.push({
       timestamp: new Date(),
       role: "assistant",
       content: lastMessage.content,
     });
   } catch (error) {
-    console.error(`\n❌ Error generating summary: ${error.message}\n`);
+    console.error(`\n${getMessage('error_generating_summary', locale, { error: error.message })}\n`);
   }
 }
 
 // Start the interactive chat session
-async function startChat(agent) {
+async function startChat(agent, locale, uiLanguage, transcriptLanguage) {
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
   });
 
   console.log("\n" + "=".repeat(60));
-  console.log("💬 Chat started! Ask questions about the video.");
-  console.log("Type 'exit', 'quit', or press Ctrl+C to end the session.");
-  console.log("Type '/export' to export the conversation.");
-  console.log("Type '/lang' to change language settings.");
+  console.log(getMessage('chat_started_with_languages', locale, {
+    uiLanguage: getLanguageName(uiLanguage),
+    transcriptLanguage: getLanguageName(transcriptLanguage)
+  }));
+  console.log(getMessage('chat_exit_instruction', locale));
+  console.log(getMessage('chat_export_instruction', locale));
+  console.log(getMessage('chat_lang_instruction', locale));
   console.log("=".repeat(60) + "\n");
 
   const askQuestion = () => {
@@ -715,55 +638,49 @@ async function startChat(agent) {
       }
 
       if (userInput.toLowerCase() === "exit" || userInput.toLowerCase() === "quit") {
-        console.log("\n👋 Goodbye!");
+        console.log(`\n${getMessage('chat_goodbye', locale)}`);
         rl.close();
         process.exit(0);
-        return;
       }
 
-      // Handle /export command
       if (userInput.toLowerCase() === "/export") {
-        await handleExportCommand(rl);
+        await handleExportCommand(rl, locale);
         askQuestion();
         return;
       }
 
-      // Handle /lang command
       if (userInput.toLowerCase() === "/lang") {
-        await handleLangCommand(rl);
+        await handleLangCommand(rl, locale);
         askQuestion();
         return;
       }
 
       try {
-        // Store user message in history
         conversationHistory.push({
           timestamp: new Date(),
           role: "user",
           content: userInput,
         });
 
-        console.log("\n🤔 Thinking...\n");
+        console.log(`\n${getMessage('chat_thinking', locale)}\n`);
 
         const response = await agent.invoke({
           messages: [{ role: "user", content: userInput }],
         });
 
-        // Extract the final message from the agent's response
         const messages = response.messages;
         const lastMessage = messages[messages.length - 1];
 
-        // Store assistant response in history with full message chain
         conversationHistory.push({
           timestamp: new Date(),
           role: "assistant",
           content: lastMessage.content,
-          fullMessages: messages, // Store all messages including tool calls and reasoning
+          fullMessages: messages,
         });
 
         console.log(`Assistant: ${lastMessage.content}\n`);
       } catch (error) {
-        console.error(`\n❌ Error: ${error.message}\n`);
+        console.error(`\n${getMessage('error_general', locale, { error: error.message })}\n`);
       }
 
       askQuestion();
@@ -776,24 +693,15 @@ async function startChat(agent) {
 // Main execution
 (async () => {
   try {
-    // Language priority: 1. CLI flag, 2. Config file, 3. System locale
-    let effectiveLanguageOverride = languageOverride;
+    // Load config and detect locale
+    const config = await loadConfig();
 
-    if (!effectiveLanguageOverride) {
-      // No CLI flag, check config file
-      const config = await loadConfig();
-      if (config.language) {
-        effectiveLanguageOverride = config.language;
-        console.log(`📄 Using saved language preference: ${config.language}`);
-      }
-    }
-
-    const { language, userLocale } = await initialize(effectiveLanguageOverride);
+    const { language, userLocale, transcriptLanguage } = await initialize(config);
     const agent = await createAgent(language, userLocale);
-    await generateSummary(agent);
-    await startChat(agent);
+    await generateSummary(agent, userLocale);
+    await startChat(agent, userLocale, language, transcriptLanguage);
   } catch (error) {
-    console.error("\n❌ Error:", error.message);
+    console.error(`\n${getMessage('error_general', currentLocale, { error: error.message })}`);
     process.exit(1);
   }
 })();
