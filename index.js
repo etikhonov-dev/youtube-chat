@@ -110,7 +110,7 @@ class SemanticChunker {
   constructor(embeddings, options = {}) {
     this.embeddings = embeddings;
     this.bufferSize = options.bufferSize || 1;
-    this.breakpointThresholdType = options.breakpointThresholdType || "percentile";
+    this.breakpointThresholdType = options.breakpointThresholdType || "interquartile";
     this.breakpointThresholdAmount = options.breakpointThresholdAmount;
     this.sentenceSplitRegex = options.sentenceSplitRegex || /(?<=[.?!])\s+/;
   }
@@ -307,7 +307,7 @@ async function initialize(config) {
   });
 
   const textSplitter = new SemanticChunker(embeddings, {
-    breakpointThresholdType: "percentile",
+    breakpointThresholdType: "interquartile",
   });
 
   const splits = await textSplitter.splitDocuments(docs);
@@ -363,7 +363,7 @@ Description: ${videoMetadata.description}`;
 async function createAgent(language, userLocale) {
   const llm = new ChatGoogleGenerativeAI({
     model: "gemini-2.0-flash-001",
-    maxRetries: 2,
+    maxRetries: 3,
   });
 
   const tools = [searchTranscriptTool, getVideoInfoTool];
