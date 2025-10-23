@@ -10,6 +10,7 @@ import { Document } from "@langchain/core/documents";
 import readline from "readline";
 import { Innertube } from "youtubei.js";
 import clipboardy from "clipboardy";
+import stringWidth from "string-width";
 import fs from "fs/promises";
 import os from "os";
 import path from "path";
@@ -78,6 +79,16 @@ function formatTimestamp(seconds) {
     return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   }
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+
+// Helper function to pad strings accounting for visual width (handles wide characters)
+function padEndVisual(str, targetWidth, padChar = ' ') {
+  const currentWidth = stringWidth(str);
+  if (currentWidth >= targetWidth) {
+    return str;
+  }
+  const paddingNeeded = targetWidth - currentWidth;
+  return str + padChar.repeat(paddingNeeded);
 }
 
 // Config file path
@@ -496,7 +507,7 @@ async function handleLangCommand(rl, locale) {
   for (let i = 0; i < halfLength; i++) {
     const [code1, name1] = langEntries[i];
     const num1 = String(i + 1).padStart(2, ' ');
-    const col1 = `${num1}. ${code1.padEnd(3)} - ${name1.padEnd(20)}`;
+    const col1 = `${num1}. ${code1.padEnd(3)} - ${padEndVisual(name1, 20)}`;
 
     if (i + halfLength < langEntries.length) {
       const [code2, name2] = langEntries[i + halfLength];

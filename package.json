@@ -20,6 +20,7 @@
     "clipboardy": "^5.0.0",
     "get-user-locale": "^3.0.0",
     "langchain": "^1.0.1",
+    "string-width": "^8.1.0",
     "youtubei.js": "^16.0.1"
   }
 }
