@@ -17,9 +17,12 @@
     "@langchain/core": "^1.0.1",
     "@langchain/google-genai": "^1.0.0",
     "@langchain/textsplitters": "^1.0.0",
+    "chalk": "^5.4.1",
+    "cli-markdown": "^3.5.0",
     "clipboardy": "^5.0.0",
     "get-user-locale": "^3.0.0",
     "langchain": "^1.0.1",
+    "ora": "^9.0.0",
     "string-width": "^8.1.0",
     "youtubei.js": "^16.0.1"
   }

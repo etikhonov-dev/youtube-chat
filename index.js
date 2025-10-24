@@ -14,6 +14,8 @@ import stringWidth from "string-width";
 import fs from "fs/promises";
 import os from "os";
 import path from "path";
+import ora from "ora";
+import cliMarkdown from "cli-markdown";
 import { getMessage, getLanguageName, detectLocale, getLanguageEntries } from "./localization.js";
 
 // Suppress [YOUTUBEJS][Parser] and [YOUTUBEJS][Text] warnings
@@ -79,6 +81,16 @@ function formatTimestamp(seconds) {
     return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   }
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+
+// Render markdown to terminal
+function renderMarkdown(text) {
+  try {
+    return cliMarkdown(text);
+  } catch (error) {
+    // If markdown parsing fails, return original text
+    return text;
+  }
 }
 
 // Helper function to pad strings accounting for visual width (handles wide characters)
@@ -242,89 +254,103 @@ async function initialize(config) {
   const { language, locale: userLocale } = detectLocale(config);
   currentLocale = userLocale; // Set global locale for error messages
 
-  console.log(`\n${getMessage('loading_transcript', userLocale)}`);
+  console.log('');
 
-  // Extract video ID using our robust pattern
-  const videoId = extractVideoId(youtubeUrl);
-
-  // Load YouTube transcript
-  let docs;
-  let actualLanguage = language;
-
-  // Check if user prefers accurate English transcript
-  const preferEnglish = config.preferAccurateTranscript === true;
-  const transcriptLanguage = preferEnglish ? 'en' : language;
+  const spinner = ora({
+    text: getMessage('loading_transcript', userLocale),
+    spinner: 'dots'
+  }).start();
 
   try {
-    const loader = new YoutubeLoader({
-      videoId: videoId,
-      language: transcriptLanguage,
-      addVideoInfo: true,
-    });
-    docs = await loader.load();
-    actualLanguage = transcriptLanguage;
+    // Extract video ID using our robust pattern
+    const videoId = extractVideoId(youtubeUrl);
 
-    if (!docs || docs.length === 0) {
-      throw new Error("No transcript found");
-    }
-  } catch (error) {
-    if (transcriptLanguage !== 'en') {
-      console.log(getMessage('transcript_fallback', userLocale, { language: transcriptLanguage.toUpperCase() }));
-      try {
-        const loaderEn = new YoutubeLoader({
-          videoId: videoId,
-          language: 'en',
-          addVideoInfo: true,
-        });
-        docs = await loaderEn.load();
-        actualLanguage = 'en';
+    // Load YouTube transcript
+    let docs;
+    let actualLanguage = language;
 
-        if (!docs || docs.length === 0) {
+    // Check if user prefers accurate English transcript
+    const preferEnglish = config.preferAccurateTranscript === true;
+    const transcriptLanguage = preferEnglish ? 'en' : language;
+
+    try {
+      const loader = new YoutubeLoader({
+        videoId: videoId,
+        language: transcriptLanguage,
+        addVideoInfo: true,
+      });
+      docs = await loader.load();
+      actualLanguage = transcriptLanguage;
+
+      if (!docs || docs.length === 0) {
+        throw new Error("No transcript found");
+      }
+    } catch (error) {
+      if (transcriptLanguage !== 'en') {
+        spinner.text = getMessage('transcript_fallback', userLocale, { language: transcriptLanguage.toUpperCase() });
+        try {
+          const loaderEn = new YoutubeLoader({
+            videoId: videoId,
+            language: 'en',
+            addVideoInfo: true,
+          });
+          docs = await loaderEn.load();
+          actualLanguage = 'en';
+
+          if (!docs || docs.length === 0) {
+            throw new Error(getMessage('error_no_transcript_any', userLocale));
+          }
+        } catch (fallbackError) {
           throw new Error(getMessage('error_no_transcript_any', userLocale));
         }
-      } catch (fallbackError) {
-        throw new Error(getMessage('error_no_transcript_any', userLocale));
+      } else {
+        throw new Error(getMessage('error_no_transcript', userLocale));
       }
-    } else {
-      throw new Error(getMessage('error_no_transcript', userLocale));
     }
-  }
 
-  // Fetch video duration
-  let duration = 0;
-  try {
-    const youtube = await Innertube.create();
-    const info = await youtube.getInfo(videoId);
-    duration = info.basic_info.duration || 0;
+    // Fetch video duration
+    let duration = 0;
+    try {
+      const youtube = await Innertube.create();
+      const info = await youtube.getInfo(videoId);
+      duration = info.basic_info.duration || 0;
+    } catch (error) {
+      console.warn(getMessage('video_duration_warning', userLocale, { error: error.message }));
+    }
+
+    // Store video metadata
+    videoMetadata = {
+      title: docs[0].metadata.title || "Unknown",
+      description: docs[0].metadata.description || "No description",
+      author: docs[0].metadata.author || "Unknown",
+      duration: duration,
+    };
+
+    spinner.stop();
+    spinner.clear();
+
+    console.log(getMessage('video_info_title', userLocale, { title: videoMetadata.title }));
+    console.log(getMessage('video_info_author', userLocale, { author: videoMetadata.author }));
+    console.log(getMessage('video_info_duration', userLocale, { duration: formatTimestamp(videoMetadata.duration) }));
+    console.log('');
+
+    // Create embeddings and vector store
+    const embeddings = new GoogleGenerativeAIEmbeddings({
+      model: "text-embedding-004",
+    });
+
+    const textSplitter = new SemanticChunker(embeddings, {
+      breakpointThresholdType: "interquartile",
+    });
+
+    const splits = await textSplitter.splitDocuments(docs);
+    vectorStore = await MemoryVectorStore.fromDocuments(splits, embeddings);
+
+    return { language, userLocale, transcriptLanguage: actualLanguage };
   } catch (error) {
-    console.warn(getMessage('video_duration_warning', userLocale, { error: error.message }));
+    spinner.fail();
+    throw error;
   }
-
-  // Store video metadata
-  videoMetadata = {
-    title: docs[0].metadata.title || "Unknown",
-    description: docs[0].metadata.description || "No description",
-    author: docs[0].metadata.author || "Unknown",
-    duration: duration,
-  };
-
-  console.log(getMessage('video_info_title', userLocale, { title: videoMetadata.title }));
-  console.log(getMessage('video_info_author', userLocale, { author: videoMetadata.author }));
-  console.log(getMessage('video_info_duration', userLocale, { duration: formatTimestamp(videoMetadata.duration) }));
-
-  // Create embeddings and vector store
-  const embeddings = new GoogleGenerativeAIEmbeddings({
-    model: "text-embedding-004",
-  });
-
-  const textSplitter = new SemanticChunker(embeddings, {
-    breakpointThresholdType: "interquartile",
-  });
-
-  const splits = await textSplitter.splitDocuments(docs);
-  vectorStore = await MemoryVectorStore.fromDocuments(splits, embeddings);
-
-  return { language, userLocale, transcriptLanguage: actualLanguage };
 }
 
 // Tool: Search the video transcript
@@ -582,24 +608,25 @@ async function handleLangCommand(rl, locale) {
 
 // Generate summary of main topics
 async function generateSummary(agent, locale) {
-  console.log(`\n${getMessage('summary_generating', locale)}\n`);
+  const summarySpinner = ora({
+    text: getMessage('summary_generating', locale),
+    spinner: 'dots'
+  }).start();
 
-  const summaryQuestion = getMessage('summary_question', locale);
   const summaryIntro = getMessage('summary_intro', locale, { title: videoMetadata.title });
 
   const summaryPrompt = `Based on the video "${videoMetadata.title}", what are the main topics covered?
 
-Please format your response EXACTLY like this:
+IMPORTANT: Start your response IMMEDIATELY with "${summaryIntro}" followed by a numbered list. Do NOT include any other text before or after. Do NOT explain what you're doing. Be direct and user-centric.
 
-${summaryQuestion}
-
+Format:
 ${summaryIntro}
 
-1. [Topic Name]
-2. [Topic Name]
-3. [Topic Name]
+1. **Topic Name**: Brief description
+2. **Topic Name**: Brief description
+3. **Topic Name**: Brief description
 
-Search the transcript thoroughly to identify 5-8 main topics. Be specific about what each topic covers.`;
+Search the transcript thoroughly to identify 5-8 main topics.`;
 
   try {
     const response = await agent.invoke({
@@ -609,15 +636,24 @@ Search the transcript thoroughly to identify 5-8 main topics. Be specific about 
     const messages = response.messages;
     const lastMessage = messages[messages.length - 1];
 
-    console.log(lastMessage.content);
+    summarySpinner.stop();
+    summarySpinner.clear();
+    console.log(renderMarkdown(lastMessage.content));
     console.log("\n" + "=".repeat(60));
 
+    // Add both the user request and assistant response to history
+    conversationHistory.push({
+      timestamp: new Date(),
+      role: "user",
+      content: summaryPrompt,
+    });
     conversationHistory.push({
       timestamp: new Date(),
       role: "assistant",
       content: lastMessage.content,
     });
   } catch (error) {
+    summarySpinner.fail();
     console.error(`\n${getMessage('error_generating_summary', locale, { error: error.message })}\n`);
   }
 }
@@ -673,10 +709,19 @@ async function startChat(agent, locale, uiLanguage, transcriptLanguage) {
           content: userInput,
         });
 
-        console.log(`\n${getMessage('chat_thinking', locale)}\n`);
+        const thinkingSpinner = ora({
+          text: getMessage('chat_thinking', locale),
+          spinner: 'dots'
+        }).start();
+
+        // Build message history from conversationHistory
+        const messageHistory = conversationHistory.map(entry => ({
+          role: entry.role,
+          content: entry.content
+        }));
 
         const response = await agent.invoke({
-          messages: [{ role: "user", content: userInput }],
+          messages: messageHistory,
         });
 
         const messages = response.messages;
@@ -689,7 +734,9 @@ async function startChat(agent, locale, uiLanguage, transcriptLanguage) {
           fullMessages: messages,
         });
 
-        console.log(`${getMessage('role_assistant', locale)}: ${lastMessage.content}\n`);
+        thinkingSpinner.stop();
+        thinkingSpinner.clear();
+        console.log(`${getMessage('role_assistant', locale)}: ${renderMarkdown(lastMessage.content)}\n`);
       } catch (error) {
         console.error(`\n${getMessage('error_general', locale, { error: error.message })}\n`);
       }
