@@ -640,7 +640,7 @@ async function startChat(agent, locale, uiLanguage, transcriptLanguage) {
   console.log("=".repeat(60) + "\n");
 
   const askQuestion = () => {
-    rl.question("You: ", async (input) => {
+    rl.question(`${getMessage('role_you', locale)}: `, async (input) => {
       const userInput = input.trim();
 
       if (!userInput) {
@@ -689,7 +689,7 @@ async function startChat(agent, locale, uiLanguage, transcriptLanguage) {
           fullMessages: messages,
         });
 
-        console.log(`Assistant: ${lastMessage.content}\n`);
+        console.log(`${getMessage('role_assistant', locale)}: ${lastMessage.content}\n`);
       } catch (error) {
         console.error(`\n${getMessage('error_general', locale, { error: error.message })}\n`);
       }
