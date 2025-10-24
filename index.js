@@ -641,12 +641,6 @@ Search the transcript thoroughly to identify 5-8 main topics.`;
     console.log(renderMarkdown(lastMessage.content));
     console.log("\n" + "=".repeat(60));
 
-    // Add both the user request and assistant response to history
-    conversationHistory.push({
-      timestamp: new Date(),
-      role: "user",
-      content: summaryPrompt,
-    });
     conversationHistory.push({
       timestamp: new Date(),
       role: "assistant",
@@ -711,17 +705,12 @@ async function startChat(agent, locale, uiLanguage, transcriptLanguage) {
 
         const thinkingSpinner = ora({
           text: getMessage('chat_thinking', locale),
-          spinner: 'dots'
+          spinner: 'dots',
+          discardStdin: false
         }).start();
 
-        // Build message history from conversationHistory
-        const messageHistory = conversationHistory.map(entry => ({
-          role: entry.role,
-          content: entry.content
-        }));
-
         const response = await agent.invoke({
-          messages: messageHistory,
+          messages: [{ role: "user", content: userInput }],
         });
 
         const messages = response.messages;
@@ -735,7 +724,6 @@ async function startChat(agent, locale, uiLanguage, transcriptLanguage) {
         });
 
         thinkingSpinner.stop();
-        thinkingSpinner.clear();
         console.log(`${getMessage('role_assistant', locale)}: ${renderMarkdown(lastMessage.content)}\n`);
       } catch (error) {
         console.error(`\n${getMessage('error_general', locale, { error: error.message })}\n`);
