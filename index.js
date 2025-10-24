@@ -133,7 +133,7 @@ class SemanticChunker {
   constructor(embeddings, options = {}) {
     this.embeddings = embeddings;
     this.bufferSize = options.bufferSize || 1;
-    this.breakpointThresholdType = options.breakpointThresholdType || "interquartile";
+    this.breakpointThresholdType = options.breakpointThresholdType || "percentile";
     this.breakpointThresholdAmount = options.breakpointThresholdAmount;
     this.sentenceSplitRegex = options.sentenceSplitRegex || /(?<=[.?!])\s+/;
   }
@@ -598,6 +598,8 @@ async function handleLangCommand(rl, locale) {
         if (success) {
           console.log(getMessage('lang_saved', locale));
           console.log(getMessage('lang_effect_notice', locale) + '\n');
+          rl.close();
+          process.exit(0);
         }
 
         resolve();
