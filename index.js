@@ -105,13 +105,12 @@ async function initialize(config) {
     // Create agent
     const agent = await createAgent(vectorStore, videoMetadata, language, userLocale);
 
-    // Generate and display summary
+    // Generate summary (don't display it here - the new UI will show it)
     const summarySpinner = startSpinner(getMessage('summary_generating', userLocale));
     try {
       const summaryContent = await generateSummary(agent, videoMetadata, userLocale);
       summarySpinner.stop();
       summarySpinner.clear();
-      displaySummary(summaryContent);
 
       // Add summary to conversation history
       conversationHistory.push({
@@ -124,7 +123,10 @@ async function initialize(config) {
       displayError('error_generating_summary', userLocale, { error: error.message });
     }
 
-    // Start chat session
+    // Small delay to ensure spinner cleanup completes
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Start chat session with new conversational UI
     await startChat(agent, conversationHistory, videoMetadata, youtubeUrl, userLocale, language, transcriptLanguage);
   } catch (error) {
     displayError('error_general', currentLocale, { error: error.message });

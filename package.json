@@ -22,6 +22,7 @@
     "clipboardy": "^5.0.0",
     "get-user-locale": "^3.0.0",
     "langchain": "^1.0.1",
+    "omelette": "^0.4.17",
     "ora": "^9.0.0",
     "string-width": "^8.1.0",
     "youtubei.js": "^16.0.1"
