@@ -126,6 +126,9 @@ async function initialize(config) {
     // Small delay to ensure spinner cleanup completes
     await new Promise(resolve => setTimeout(resolve, 100));
 
+    // Clear screen before starting new interface to remove video info and loading messages
+    console.clear();
+
     // Start chat session with new conversational UI
     await startChat(agent, conversationHistory, videoMetadata, youtubeUrl, userLocale, language, transcriptLanguage);
   } catch (error) {

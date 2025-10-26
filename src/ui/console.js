@@ -136,8 +136,10 @@ export function createSeparator() {
  * @param {Array} chatHistory - Array of chat messages {role: 'user'|'assistant'|'thinking', content: string}
  * @param {string} currentInput - Current user input
  * @param {boolean} hasUserTypedOnce - Whether user has typed at least once
+ * @param {Array} commandSuggestions - Optional array of command suggestions to show
+ * @param {number} cursorPos - Cursor position within the input (default: end of input)
  */
-export function renderChatScreen(chatHistory, currentInput, hasUserTypedOnce) {
+export function renderChatScreen(chatHistory, currentInput, hasUserTypedOnce, commandSuggestions = [], cursorPos = null) {
   // Clear screen and move cursor to top
   console.clear();
 
@@ -156,20 +158,44 @@ export function renderChatScreen(chatHistory, currentInput, hasUserTypedOnce) {
   // Render separator
   console.log(createSeparator());
 
-  // Render input line with placeholder logic
+  // Render input line with placeholder logic (no newline after)
   if (!hasUserTypedOnce && currentInput.length === 0) {
     // State 1: Cold start - show full placeholder
-    process.stdout.write(`> ${DIM}Type your question...${RESET}`);
+    process.stdout.write(`> ${DIM}Type your question...${RESET}\n`);
   } else {
     // State 2 & 3: Active typing or post-interaction - show only input
-    process.stdout.write(`> ${currentInput}`);
+    // Add a space at the end to make cursor visible after last character
+    const displayInput = currentInput + ' ';
+    process.stdout.write(`> ${displayInput}\n`);
   }
 
   // Render separator
-  console.log('\n' + createSeparator());
+  console.log(createSeparator());
 
-  // Render hint
-  console.log(`${DIM}  / for commands${RESET}`);
+  // Render command suggestions if any
+  if (commandSuggestions.length > 0) {
+    console.log(`${DIM}  Suggestions:${RESET}`);
+    commandSuggestions.forEach(cmd => {
+      console.log(`${DIM}    ${cmd}${RESET}`);
+    });
+  } else {
+    // Render hint
+    console.log(`${DIM}  / for commands${RESET}`);
+  }
+
+  // Calculate how many lines to move up
+  const linesToMoveUp = commandSuggestions.length > 0
+    ? 3 + commandSuggestions.length // hint header + suggestions + separator + bottom position
+    : 3; // hint line + separator + bottom position
+
+  // Move cursor back up to the input line
+  process.stdout.write(`\x1b[${linesToMoveUp}A`);
+
+  // Move cursor to the correct position (default to end of input)
+  // Add 1 to cursorPos because terminal cursor should appear BEFORE the character (one space ahead)
+  const actualCursorPos = cursorPos !== null ? cursorPos : currentInput.length;
+  const cursorColumn = 2 + actualCursorPos + 1; // 2 for "> " prefix, +1 to position cursor ahead
+  process.stdout.write(`\x1b[${cursorColumn}G`);
 }
 
 /**

@@ -3,6 +3,10 @@ import { loadConfig, saveConfig } from "../services/config.js";
 import { exportToClipboard, exportToFile, getDefaultExportFilename } from "../services/export.js";
 import { padEndVisual } from "../utils/formatting.js";
 
+// ANSI escape codes
+const DIM = '\x1b[2m';
+const RESET = '\x1b[0m';
+
 /**
  * Handle export command with user prompts
  * @param {Object} rl - Readline interface
@@ -103,9 +107,18 @@ export async function handleLangCommand(rl, locale) {
   console.log(autoDetectOption);
 
   return new Promise((resolve) => {
-    const prompt = getMessage('lang_choice_prompt', locale, { max: langEntries.length + 1 });
+    const prompt = getMessage('lang_choice_prompt', locale, { max: langEntries.length + 1 }) + ' (or press Enter to cancel): ';
     rl.question(prompt, async (choice) => {
-      const selectedNum = parseInt(choice.trim(), 10);
+      const trimmedChoice = choice.trim();
+
+      // Check for empty input (just Enter) - return to chat
+      if (trimmedChoice === '') {
+        console.log(`\n${DIM}Returning to chat...${RESET}\n`);
+        resolve();
+        return;
+      }
+
+      const selectedNum = parseInt(trimmedChoice, 10);
 
       if (isNaN(selectedNum) || selectedNum < 1 || selectedNum > langEntries.length + 1) {
         console.log(`\n${getMessage('lang_invalid_choice', locale, { max: langEntries.length + 1 })}\n`);
