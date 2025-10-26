@@ -1,7 +1,7 @@
 import readline from "readline";
 import omelette from "omelette";
 import { renderChatScreen, displayChatHeader, renderMarkdown } from "./console.js";
-import { handleLangCommand as handleLangStub, handleExportCommand as handleExportStub } from "./prompts.js";
+import { handleLangCommand, handleExportCommand } from "./prompts.js";
 import { getMessage } from "../../localization.js";
 
 /**
@@ -208,8 +208,6 @@ function generateSimulatedResponse(userInput) {
  * @returns {Promise<void>}
  */
 export async function startChat(agent, conversationHistory, videoMetadata, youtubeUrl, locale, uiLanguage, transcriptLanguage) {
-  // Import original prompts handlers
-  const { handleExportCommand, handleLangCommand } = await import('./prompts-original.js');
 
   // State management - initialize with existing conversation history
   // Only show the summary once at the start
