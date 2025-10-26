@@ -343,6 +343,61 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
       return;
     }
 
+    // Handle Cmd+K (Mac) or Ctrl+K (Unix/Linux) - delete from cursor to end
+    if (key && key.ctrl && key.name === 'k') {
+      if (cursorPosition < currentInput.length) {
+        currentInput = currentInput.slice(0, cursorPosition);
+        renderScreen();
+      }
+      return;
+    }
+
+    // Handle Cmd+U (Mac) or Ctrl+U (Unix/Linux) - delete from cursor to beginning
+    if (key && key.ctrl && key.name === 'u') {
+      if (cursorPosition > 0) {
+        currentInput = currentInput.slice(cursorPosition);
+        cursorPosition = 0;
+        renderScreen();
+      }
+      return;
+    }
+
+    // Handle Option+Delete (Mac) or Ctrl+W (Windows/Linux) - delete word backwards
+    if (key && ((key.meta && key.name === 'backspace') || (key.ctrl && key.name === 'w'))) {
+      if (cursorPosition > 0) {
+        const originalCursor = cursorPosition;
+        // Skip trailing whitespace
+        while (cursorPosition > 0 && currentInput[cursorPosition - 1] === ' ') {
+          cursorPosition--;
+        }
+        // Delete the word
+        while (cursorPosition > 0 && currentInput[cursorPosition - 1] !== ' ') {
+          cursorPosition--;
+        }
+        currentInput = currentInput.slice(0, cursorPosition) + currentInput.slice(originalCursor);
+        renderScreen();
+      }
+      return;
+    }
+
+    // Handle Option+D (Mac) or Alt+D (Windows/Linux) - delete word forwards
+    if (key && ((key.meta && key.name === 'd') || (key.alt && key.name === 'd'))) {
+      if (cursorPosition < currentInput.length) {
+        let deleteEnd = cursorPosition;
+        // Skip current whitespace
+        while (deleteEnd < currentInput.length && currentInput[deleteEnd] === ' ') {
+          deleteEnd++;
+        }
+        // Delete the word
+        while (deleteEnd < currentInput.length && currentInput[deleteEnd] !== ' ') {
+          deleteEnd++;
+        }
+        currentInput = currentInput.slice(0, cursorPosition) + currentInput.slice(deleteEnd);
+        renderScreen();
+      }
+      return;
+    }
+
     // Handle backspace
     if (key && key.name === 'backspace') {
       if (cursorPosition > 0) {
