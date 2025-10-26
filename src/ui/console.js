@@ -133,15 +133,23 @@ export function createSeparator() {
 
 /**
  * Render the entire chat interface
- * @param {Array} chatHistory - Array of chat messages {role: 'user'|'assistant'|'thinking', content: string}
+ * @param {Array} chatHistory - Array of chat messages {role: 'user'|'assistant'|'thinking', content: string, isMarkdown: boolean}
  * @param {string} currentInput - Current user input
  * @param {boolean} hasUserTypedOnce - Whether user has typed at least once
  * @param {Array} commandSuggestions - Optional array of command suggestions to show
  * @param {number} cursorPos - Cursor position within the input (default: end of input)
+ * @param {boolean} isFirstRender - Whether this is the first render (preserves loading messages if true)
  */
-export function renderChatScreen(chatHistory, currentInput, hasUserTypedOnce, commandSuggestions = [], cursorPos = null) {
-  // Clear screen and move cursor to top
-  console.clear();
+export function renderChatScreen(chatHistory, currentInput, hasUserTypedOnce, commandSuggestions = [], cursorPos = null, isFirstRender = false) {
+  if (isFirstRender) {
+    // On first render, save the cursor position (this is right after loading messages)
+    // We'll return to this position on subsequent renders
+    process.stdout.write('\x1b7'); // Save cursor position (ESC 7)
+  } else {
+    // On subsequent renders, restore cursor to saved position and clear from there down
+    process.stdout.write('\x1b8'); // Restore cursor position (ESC 8)
+    process.stdout.write('\x1b[J'); // Clear from cursor to end of screen
+  }
 
   // Render chat history
   for (const message of chatHistory) {
@@ -151,7 +159,9 @@ export function renderChatScreen(chatHistory, currentInput, hasUserTypedOnce, co
       console.log(`${DIM}└ ${message.content}${RESET}`);
     } else if (message.role === 'assistant') {
       console.log(''); // Blank line before assistant response
-      console.log(message.content);
+      // Render markdown on-demand for proper terminal resize handling
+      const displayContent = message.isMarkdown ? renderMarkdown(message.content) : message.content;
+      console.log(displayContent);
     }
   }
 

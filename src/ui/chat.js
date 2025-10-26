@@ -213,17 +213,16 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
 
   // State management - initialize with existing conversation history
   // Only show the summary once at the start
+  // Store raw content in chatHistory, render markdown on-demand for proper terminal resize handling
   let chatHistory = [];
   if (conversationHistory.length > 0) {
     // Assuming the first entry is the summary
     const summaryEntry = conversationHistory[0];
     if (summaryEntry && summaryEntry.role === 'assistant') {
-      const summaryText = summaryEntry.content;
-      const rendered = renderMarkdown(summaryText);
-
       chatHistory.push({
         role: 'assistant',
-        content: rendered
+        content: summaryEntry.content,
+        isMarkdown: true
       });
     }
   }
@@ -231,6 +230,7 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
   let cursorPosition = 0; // Track cursor position within the input
   let hasUserTypedOnce = false;
   let isProcessing = false;
+  let isFirstRender = true; // Track if this is the first render to preserve loading messages
 
   // Note: omelette autocomplete doesn't work in raw mode
   // Raw mode intercepts all keystrokes before the shell can process them
@@ -256,14 +256,6 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
   // Handle keypress events
   process.stdin.on('keypress', async (str, key) => {
     if (isProcessing) return;
-
-    // DEBUG: Log key events to understand what's being received
-    // Remove this after debugging Option+Arrow issue
-    if (key && key.meta) {
-      const fs = await import('fs');
-      const debugLog = `Key pressed: name="${key.name}", meta=${key.meta}, ctrl=${key.ctrl}, shift=${key.shift}, sequence="${key.sequence}"\n`;
-      fs.appendFileSync('/tmp/youtube-chat-debug.log', debugLog);
-    }
 
     // Handle Ctrl+C
     if (key && key.ctrl && key.name === 'c') {
@@ -485,8 +477,16 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
         });
 
         const messages = response.messages;
-        const lastMessage = messages[messages.length - 1];
-        const assistantContent = lastMessage.content;
+
+        // Filter to get ONLY AI/assistant messages (not tool calls or tool responses)
+        const aiMessages = messages.filter(msg => {
+          const msgType = msg._getType ? msg._getType() : msg.constructor.name;
+          return msgType === 'ai' || msgType === 'AIMessage';
+        });
+
+        // Get the last AI message (the final response)
+        const lastAIMessage = aiMessages.length > 0 ? aiMessages[aiMessages.length - 1] : messages[messages.length - 1];
+        const assistantContent = lastAIMessage.content;
 
         // Add to conversation history
         conversationHistory.push({
@@ -499,8 +499,8 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
         // Remove thinking indicator
         chatHistory.pop();
 
-        // Add assistant response (render as markdown)
-        chatHistory.push({ role: 'assistant', content: renderMarkdown(assistantContent) });
+        // Add assistant response (store raw content, render on-demand)
+        chatHistory.push({ role: 'assistant', content: assistantContent, isMarkdown: true });
 
       } catch (error) {
         // Remove thinking indicator
@@ -550,10 +550,15 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
       commandSuggestions = commands.filter(cmd => cmd.startsWith(currentWord) && cmd !== currentWord);
     }
 
-    renderChatScreen(chatHistory, currentInput, hasUserTypedOnce, commandSuggestions, cursorPosition);
+    renderChatScreen(chatHistory, currentInput, hasUserTypedOnce, commandSuggestions, cursorPosition, isFirstRender);
+
+    // After first render, set flag to false so subsequent renders don't clear loading messages
+    if (isFirstRender) {
+      isFirstRender = false;
+    }
   }
 
-  // Initial render (renderChatScreen will clear the console)
+  // Initial render (will NOT clear the console to preserve loading messages)
   renderScreen();
 
   // Return a promise that resolves when the user exits
