@@ -387,7 +387,8 @@ console.log(getMessage('loading_transcript', locale)); // ✅ Good
 ### External Dependencies by Layer
 
 **UI Layer**:
-- `readline` - User input
+- `readline` - User input (line-based with built-in editing)
+- `omelette` - Shell completion for commands
 - `ora` - Spinners
 - `cli-markdown` - Markdown rendering
 
@@ -434,10 +435,10 @@ console.log(getMessage('loading_transcript', locale)); // ✅ Good
 
 | File | Lines | Primary Purpose |
 |------|-------|----------------|
-| `index.js` | 133 | Orchestration & initialization |
-| `src/ui/console.js` | ~110 | Display formatting |
-| `src/ui/prompts.js` | ~160 | Interactive prompts |
-| `src/ui/chat.js` | ~90 | Chat loop |
+| `index.js` | ~133 | Orchestration & initialization |
+| `src/ui/console.js` | ~135 | Display formatting & utilities |
+| `src/ui/prompts.js` | ~175 | Interactive prompts for /lang and /export |
+| `src/ui/chat.js` | ~370 | Chat interface with readline |
 | `src/core/agent.js` | ~135 | AI agent & tools |
 | `src/core/youtube.js` | ~80 | YouTube data loading |
 | `src/core/vector-store.js` | ~150 | Vector store & chunking |
@@ -467,6 +468,17 @@ console.log(getMessage('loading_transcript', locale)); // ✅ Good
 - Makes testing easier (can inject mocks)
 - Makes dependencies explicit
 - Reduces hidden coupling between modules
+
+### Why use readline instead of raw mode for input?
+- **Simplicity**: Readline handles all text editing, cursor movement, and history automatically
+- **Reliability**: No flickering or disappearing console messages from screen redraws
+- **Shell Integration**: Native tab completion via `omelette` and shell features work properly
+- **Standard UX**: Familiar CLI interaction pattern like git, npm, docker
+- **Less Code**: ~300 lines of manual keypress handling replaced with ~50 lines of readline
+- **No Streaming**: Since AI responses don't stream character-by-character, raw mode isn't needed
+- **Better Compatibility**: Works with all terminal emulators and screen readers
+
+The trade-off: No mid-line cursor editing during typing. However, readline still provides arrow keys, backspace, Ctrl+U, Ctrl+K, and other standard editing shortcuts - sufficient for a chat interface.
 
 ---
 

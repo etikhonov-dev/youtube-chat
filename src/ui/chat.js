@@ -1,22 +1,57 @@
 import readline from "readline";
 import omelette from "omelette";
-import { renderChatScreen, displayChatHeader, renderMarkdown } from "./console.js";
+import { renderMarkdown, createSeparator } from "./console.js";
 import { handleLangCommand, handleExportCommand } from "./prompts.js";
 import { getMessage } from "../../localization.js";
 
+// ANSI escape codes
+const DIM = '\x1b[2m';
+const RESET = '\x1b[0m';
+
 /**
- * Start the conversational CLI interface (standalone version)
+ * Display chat history
+ * @param {Array} chatHistory - Array of chat messages
+ */
+function displayChatHistory(chatHistory) {
+  for (const message of chatHistory) {
+    if (message.role === 'user') {
+      console.log(`> ${message.content}`);
+    } else if (message.role === 'assistant') {
+      console.log('');
+      const displayContent = message.isMarkdown ? renderMarkdown(message.content) : message.content;
+      console.log(displayContent);
+    }
+  }
+}
+
+/**
+ * Start the interactive chat session with readline
+ * @param {Object} agent - Agent instance
+ * @param {Array} conversationHistory - Array to store conversation history
+ * @param {Object} videoMetadata - Video metadata object
+ * @param {string} youtubeUrl - YouTube video URL
+ * @param {string} locale - Current locale
+ * @param {string} uiLanguage - UI language code
+ * @param {string} transcriptLanguage - Transcript language code
  * @returns {Promise<void>}
  */
-export async function startChatInterface() {
-  // State management
+export async function startChat(agent, conversationHistory, videoMetadata, youtubeUrl, locale, uiLanguage, transcriptLanguage) {
+  // State management - initialize with existing conversation history
   let chatHistory = [];
-  let currentInput = '';
-  let hasUserTypedOnce = false;
-  let isProcessing = false;
+  if (conversationHistory.length > 0) {
+    // Show the summary at the start
+    const summaryEntry = conversationHistory[0];
+    if (summaryEntry && summaryEntry.role === 'assistant') {
+      chatHistory.push({
+        role: 'assistant',
+        content: summaryEntry.content,
+        isMarkdown: true
+      });
+    }
+  }
 
-  // Setup autocompletion for commands
-  const complete = omelette('node index.js');
+  // Setup omelette shell completion (works outside of the readline interface)
+  const complete = omelette('youtube-chat');
   complete.on('complete', (fragment, data) => {
     if (fragment === '' || fragment === '/') {
       data.reply(['/lang', '/export', '/exit', '/quit']);
@@ -27,150 +62,268 @@ export async function startChatInterface() {
   });
   complete.init();
 
-  // Enable raw mode for character-by-character input
-  readline.emitKeypressEvents(process.stdin);
-  if (process.stdin.isTTY) {
-    process.stdin.setRawMode(true);
+  // Create readline interface with built-in tab completion
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    prompt: '> ',
+    completer: (line) => {
+      // Only autocomplete if line starts with /
+      if (line.startsWith('/')) {
+        const commands = ['/lang', '/export', '/exit', '/quit'];
+        const hits = commands.filter(cmd => cmd.startsWith(line));
+        return [hits.length ? hits : commands, line];
+      }
+      return [[], line];
+    }
+  });
+
+  // Track if we need to redraw separator on resize
+  let lastSeparator = createSeparator();
+
+  // Handle terminal resize events
+  process.stdout.on('resize', () => {
+    lastSeparator = createSeparator();
+  });
+
+  // Display initial chat history if any
+  if (chatHistory.length > 0) {
+    displayChatHistory(chatHistory);
+    console.log(''); // Blank line after history
   }
 
-  // Handle keypress events
-  process.stdin.on('keypress', async (str, key) => {
-    if (isProcessing) return;
+  // Show initial separator and hint
+  console.log(lastSeparator);
+  console.log(`${DIM}  Commands: /lang /export /exit${RESET}`);
+  console.log(lastSeparator);
+  console.log('');
 
-    // Handle Ctrl+C
-    if (key && key.ctrl && key.name === 'c') {
-      if (process.stdin.isTTY) {
-        process.stdin.setRawMode(false);
+  // Set prompt and show it
+  rl.setPrompt('> ');
+  rl.prompt();
+
+  // Handle line input
+  rl.on('line', async (input) => {
+    const trimmed = input.trim();
+
+    // Handle empty input
+    if (!trimmed) {
+      rl.prompt();
+      return;
+    }
+
+    // Handle exit commands
+    if (trimmed.toLowerCase() === '/exit' || trimmed.toLowerCase() === '/quit') {
+      rl.close();
+      console.clear();
+      console.log(`\n${getMessage('chat_goodbye', locale)}\n`);
+      process.exit(0);
+    }
+
+    // Handle /lang command
+    if (trimmed.toLowerCase() === '/lang') {
+      console.clear();
+      await handleLangCommand(rl, locale);
+      // Note: handleLangCommand may exit the process if config is changed
+      displayChatHistory(chatHistory);
+      console.log('');
+      rl.prompt();
+      return;
+    }
+
+    // Handle /export command
+    if (trimmed.toLowerCase() === '/export') {
+      console.clear();
+      await handleExportCommand(rl, conversationHistory, videoMetadata, youtubeUrl, locale);
+      displayChatHistory(chatHistory);
+      console.log('');
+      rl.prompt();
+      return;
+    }
+
+    // Handle regular message
+    chatHistory.push({ role: 'user', content: trimmed });
+    conversationHistory.push({
+      timestamp: new Date(),
+      role: "user",
+      content: trimmed,
+    });
+
+    // Show thinking indicator
+    console.log(`${DIM}└ Thinking...${RESET}`);
+
+    try {
+      // Get AI response
+      const response = await agent.invoke({
+        messages: [{ role: "user", content: trimmed }],
+      });
+
+      const messages = response.messages;
+
+      // Filter to get ONLY AI/assistant messages (not tool calls or tool responses)
+      const aiMessages = messages.filter(msg => {
+        const msgType = msg._getType ? msg._getType() : msg.constructor.name;
+        return msgType === 'ai' || msgType === 'AIMessage';
+      });
+
+      // Get the last AI message (the final response)
+      const lastAIMessage = aiMessages.length > 0 ? aiMessages[aiMessages.length - 1] : messages[messages.length - 1];
+      const assistantContent = lastAIMessage.content;
+
+      // Add to conversation history
+      conversationHistory.push({
+        timestamp: new Date(),
+        role: "assistant",
+        content: assistantContent,
+        fullMessages: messages,
+      });
+
+      // Add to chat history
+      chatHistory.push({ role: 'assistant', content: assistantContent, isMarkdown: true });
+
+      // Clear the thinking indicator line and move up
+      process.stdout.write('\r\x1b[K');
+      process.stdout.write('\x1b[1A\r\x1b[K');
+
+      // Display the response
+      console.log('');
+      console.log(renderMarkdown(assistantContent));
+
+    } catch (error) {
+      // Clear the thinking indicator
+      process.stdout.write('\r\x1b[K');
+      process.stdout.write('\x1b[1A\r\x1b[K');
+
+      // Display error
+      const errorMessage = `Error: ${error.message}`;
+      console.log('');
+      console.log(errorMessage);
+      chatHistory.push({ role: 'assistant', content: errorMessage });
+    }
+
+    // Show clean prompt for next input
+    console.log('');
+    rl.prompt();
+  });
+
+  // Handle Ctrl+C
+  rl.on('SIGINT', () => {
+    rl.close();
+    console.clear();
+    console.log(`\n${getMessage('chat_goodbye', locale)}\n`);
+    process.exit(0);
+  });
+
+  // Return a promise that keeps the process alive
+  return new Promise((resolve) => {
+    rl.on('close', () => {
+      resolve();
+    });
+  });
+}
+
+/**
+ * Start the conversational CLI interface (standalone version for testing)
+ * @returns {Promise<void>}
+ */
+export async function startChatInterface() {
+  // Create readline interface
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    prompt: '> ',
+    completer: (line) => {
+      if (line.startsWith('/')) {
+        const commands = ['/lang', '/export', '/exit', '/quit'];
+        const hits = commands.filter(cmd => cmd.startsWith(line));
+        return [hits.length ? hits : commands, line];
       }
+      return [[], line];
+    }
+  });
+
+  let chatHistory = [];
+
+  console.log(`${DIM}Welcome! Type your message or use / for commands${RESET}\n`);
+  console.log(createSeparator());
+  console.log(`${DIM}  Commands: /lang /export /exit${RESET}`);
+  console.log(createSeparator());
+  console.log('');
+
+  rl.prompt();
+
+  rl.on('line', async (input) => {
+    const trimmed = input.trim();
+
+    if (!trimmed) {
+      rl.prompt();
+      return;
+    }
+
+    if (trimmed.toLowerCase() === '/exit' || trimmed.toLowerCase() === '/quit') {
+      rl.close();
       console.clear();
       console.log("\nGoodbye!\n");
       process.exit(0);
     }
 
-    // Handle backspace
-    if (key && key.name === 'backspace') {
-      if (currentInput.length > 0) {
-        currentInput = currentInput.slice(0, -1);
-        renderScreen();
-      }
+    if (trimmed.toLowerCase() === '/lang') {
+      console.clear();
+      await handleLangCommand(rl, 'en');
+      displayHistory();
+      console.log('');
+      rl.prompt();
       return;
     }
 
-    // Handle Enter
-    if (key && key.name === 'return') {
-      const userInput = currentInput.trim();
-
-      // Handle empty input
-      if (!userInput) {
-        currentInput = '';
-        renderScreen();
-        return;
-      }
-
-      // Mark that user has typed once
-      if (!hasUserTypedOnce) {
-        hasUserTypedOnce = true;
-      }
-
-      // Handle commands
-      if (userInput.toLowerCase() === '/exit' || userInput.toLowerCase() === '/quit') {
-        if (process.stdin.isTTY) {
-          process.stdin.setRawMode(false);
-        }
-        console.clear();
-        console.log("\nGoodbye!\n");
-        process.exit(0);
-      }
-
-      if (userInput.toLowerCase() === '/lang') {
-        isProcessing = true;
-        if (process.stdin.isTTY) {
-          process.stdin.setRawMode(false);
-        }
-        console.clear();
-        await handleLangCommand();
-        if (process.stdin.isTTY) {
-          process.stdin.setRawMode(true);
-        }
-        currentInput = '';
-        cursorPosition = 0;
-        isProcessing = false;
-        renderScreen();
-        return;
-      }
-
-      if (userInput.toLowerCase() === '/export') {
-        isProcessing = true;
-        if (process.stdin.isTTY) {
-          process.stdin.setRawMode(false);
-        }
-        console.clear();
-        await handleExportCommand();
-        if (process.stdin.isTTY) {
-          process.stdin.setRawMode(true);
-        }
-        currentInput = '';
-        cursorPosition = 0;
-        isProcessing = false;
-        renderScreen();
-        return;
-      }
-
-      // Handle regular message
-      isProcessing = true;
-      currentInput = '';
-
-      // Add user message to history
-      chatHistory.push({ role: 'user', content: userInput });
-
-      // Add thinking indicator
-      chatHistory.push({ role: 'thinking', content: 'Thinking...' });
-
-      // Render with thinking indicator
-      renderScreen();
-
-      // Simulate assistant response
-      setTimeout(() => {
-        // Remove thinking indicator
-        chatHistory.pop();
-
-        // Add assistant response
-        const response = generateSimulatedResponse(userInput);
-        chatHistory.push({ role: 'assistant', content: response });
-
-        // Reset state
-        isProcessing = false;
-        currentInput = '';
-
-        // Render final state
-        renderScreen();
-      }, 1500);
-
+    if (trimmed.toLowerCase() === '/export') {
+      console.clear();
+      await handleExportCommand(rl, chatHistory, {}, '', 'en');
+      displayHistory();
+      console.log('');
+      rl.prompt();
       return;
     }
 
-    // Handle regular characters
-    if (str && !key.ctrl && !key.meta) {
-      // Mark that user has typed once
-      if (!hasUserTypedOnce) {
-        hasUserTypedOnce = true;
-      }
+    // Handle regular message
+    chatHistory.push({ role: 'user', content: trimmed });
+    console.log(`${DIM}└ Thinking...${RESET}`);
 
-      currentInput += str;
-      renderScreen();
-    }
+    // Simulate response
+    setTimeout(() => {
+      process.stdout.write('\r\x1b[K\x1b[1A\r\x1b[K');
+
+      const response = generateSimulatedResponse(trimmed);
+      chatHistory.push({ role: 'assistant', content: response });
+
+      console.log('');
+      console.log(response);
+      console.log('');
+      rl.prompt();
+    }, 1000);
   });
 
-  // Helper function to render screen
-  function renderScreen() {
-    renderChatScreen(chatHistory, currentInput, hasUserTypedOnce);
+  function displayHistory() {
+    for (const msg of chatHistory) {
+      if (msg.role === 'user') {
+        console.log(`> ${msg.content}`);
+      } else {
+        console.log('');
+        console.log(msg.content);
+      }
+    }
   }
 
-  // Initial render
-  renderScreen();
+  rl.on('SIGINT', () => {
+    rl.close();
+    console.clear();
+    console.log("\nGoodbye!\n");
+    process.exit(0);
+  });
 
-  // Keep process alive
-  return new Promise(() => {});
+  return new Promise((resolve) => {
+    rl.on('close', resolve);
+  });
 }
 
 /**
@@ -192,432 +345,5 @@ function generateSimulatedResponse(userInput) {
     return responses[lowerInput];
   }
 
-  // Default response
   return `You asked: "${userInput}". This is a simulated response. In a full implementation, this would be replaced with actual AI agent responses.`;
-}
-
-/**
- * Start the interactive chat session with new conversational UI
- * @param {Object} agent - Agent instance
- * @param {Array} conversationHistory - Array to store conversation history
- * @param {Object} videoMetadata - Video metadata object
- * @param {string} youtubeUrl - YouTube video URL
- * @param {string} locale - Current locale
- * @param {string} uiLanguage - UI language code
- * @param {string} transcriptLanguage - Transcript language code
- * @returns {Promise<void>}
- */
-export async function startChat(agent, conversationHistory, videoMetadata, youtubeUrl, locale, uiLanguage, transcriptLanguage) {
-
-  // State management - initialize with existing conversation history
-  // Only show the summary once at the start
-  // Store raw content in chatHistory, render markdown on-demand for proper terminal resize handling
-  let chatHistory = [];
-  if (conversationHistory.length > 0) {
-    // Assuming the first entry is the summary
-    const summaryEntry = conversationHistory[0];
-    if (summaryEntry && summaryEntry.role === 'assistant') {
-      chatHistory.push({
-        role: 'assistant',
-        content: summaryEntry.content,
-        isMarkdown: true
-      });
-    }
-  }
-  let currentInput = '';
-  let cursorPosition = 0; // Track cursor position within the input
-  let hasUserTypedOnce = false;
-  let isProcessing = false;
-  let isFirstRender = true; // Track if this is the first render to preserve loading messages
-
-  // Note: omelette autocomplete doesn't work in raw mode
-  // Raw mode intercepts all keystrokes before the shell can process them
-  // For now, autocomplete is disabled in the new interface
-
-  // Enable raw mode for character-by-character input
-  readline.emitKeypressEvents(process.stdin);
-  if (process.stdin.isTTY) {
-    process.stdin.setRawMode(true);
-  }
-
-  // Resume stdin to keep the event loop active
-  process.stdin.resume();
-  process.stdin.setEncoding('utf8');
-
-  // Handle terminal resize events (e.g., when cmd+b toggles sidebar in VSCode)
-  process.stdout.on('resize', () => {
-    if (!isProcessing) {
-      renderScreen();
-    }
-  });
-
-  // Handle keypress events
-  process.stdin.on('keypress', async (str, key) => {
-    if (isProcessing) return;
-
-    // Handle Ctrl+C
-    if (key && key.ctrl && key.name === 'c') {
-      if (process.stdin.isTTY) {
-        process.stdin.setRawMode(false);
-      }
-      console.clear();
-      console.log(`\n${getMessage('chat_goodbye', locale)}\n`);
-      process.exit(0);
-    }
-
-    // Handle Option+Left (often sends 'b' on Mac terminals for word back)
-    if (key && (key.name === 'b' && key.meta)) {
-      // Option+Left: jump to previous word
-      if (cursorPosition > 0) {
-        // Skip current whitespace
-        while (cursorPosition > 0 && currentInput[cursorPosition - 1] === ' ') {
-          cursorPosition--;
-        }
-        // Skip to start of current/previous word
-        while (cursorPosition > 0 && currentInput[cursorPosition - 1] !== ' ') {
-          cursorPosition--;
-        }
-        renderScreen();
-      }
-      return;
-    }
-
-    // Handle left arrow - move cursor left
-    if (key && key.name === 'left') {
-      // Regular left: move one character
-      if (cursorPosition > 0) {
-        cursorPosition--;
-        renderScreen();
-      }
-      return;
-    }
-
-    // Handle Option+Right (often sends 'f' on Mac terminals for word forward)
-    if (key && (key.name === 'f' && key.meta)) {
-      // Option+Right: jump to next word
-      if (cursorPosition < currentInput.length) {
-        // Skip current whitespace
-        while (cursorPosition < currentInput.length && currentInput[cursorPosition] === ' ') {
-          cursorPosition++;
-        }
-        // Skip to end of current/next word
-        while (cursorPosition < currentInput.length && currentInput[cursorPosition] !== ' ') {
-          cursorPosition++;
-        }
-        renderScreen();
-      }
-      return;
-    }
-
-    // Handle right arrow - move cursor right
-    if (key && key.name === 'right') {
-      // Regular right: move one character
-      if (cursorPosition < currentInput.length) {
-        cursorPosition++;
-        renderScreen();
-      }
-      return;
-    }
-
-    // Handle Tab for command autocomplete
-    if (key && key.name === 'tab') {
-      // Find the word at cursor position
-      const beforeCursor = currentInput.substring(0, cursorPosition);
-      const afterCursor = currentInput.substring(cursorPosition);
-      const lastSpaceIndex = beforeCursor.lastIndexOf(' ');
-      const currentWord = lastSpaceIndex === -1 ? beforeCursor : beforeCursor.substring(lastSpaceIndex + 1);
-
-      if (currentWord.startsWith('/')) {
-        const commands = ['/lang', '/export', '/exit', '/quit'];
-        const matches = commands.filter(cmd => cmd.startsWith(currentWord));
-        if (matches.length === 1) {
-          // Replace current word with the matched command
-          const before = lastSpaceIndex === -1 ? '' : currentInput.substring(0, lastSpaceIndex + 1);
-          currentInput = before + matches[0] + afterCursor;
-          cursorPosition = (before + matches[0]).length;
-          renderScreen();
-        }
-      }
-      return;
-    }
-
-    // Handle Cmd+K (Mac) or Ctrl+K (Unix/Linux) - delete from cursor to end
-    if (key && key.ctrl && key.name === 'k') {
-      if (cursorPosition < currentInput.length) {
-        currentInput = currentInput.slice(0, cursorPosition);
-        renderScreen();
-      }
-      return;
-    }
-
-    // Handle Cmd+U (Mac) or Ctrl+U (Unix/Linux) - delete from cursor to beginning
-    if (key && key.ctrl && key.name === 'u') {
-      if (cursorPosition > 0) {
-        currentInput = currentInput.slice(cursorPosition);
-        cursorPosition = 0;
-        renderScreen();
-      }
-      return;
-    }
-
-    // Handle Option+Delete (Mac) or Ctrl+W (Windows/Linux) - delete word backwards
-    if (key && ((key.meta && key.name === 'backspace') || (key.ctrl && key.name === 'w'))) {
-      if (cursorPosition > 0) {
-        const originalCursor = cursorPosition;
-        // Skip trailing whitespace
-        while (cursorPosition > 0 && currentInput[cursorPosition - 1] === ' ') {
-          cursorPosition--;
-        }
-        // Delete the word
-        while (cursorPosition > 0 && currentInput[cursorPosition - 1] !== ' ') {
-          cursorPosition--;
-        }
-        currentInput = currentInput.slice(0, cursorPosition) + currentInput.slice(originalCursor);
-        renderScreen();
-      }
-      return;
-    }
-
-    // Handle Option+D (Mac) or Alt+D (Windows/Linux) - delete word forwards
-    if (key && ((key.meta && key.name === 'd') || (key.alt && key.name === 'd'))) {
-      if (cursorPosition < currentInput.length) {
-        let deleteEnd = cursorPosition;
-        // Skip current whitespace
-        while (deleteEnd < currentInput.length && currentInput[deleteEnd] === ' ') {
-          deleteEnd++;
-        }
-        // Delete the word
-        while (deleteEnd < currentInput.length && currentInput[deleteEnd] !== ' ') {
-          deleteEnd++;
-        }
-        currentInput = currentInput.slice(0, cursorPosition) + currentInput.slice(deleteEnd);
-        renderScreen();
-      }
-      return;
-    }
-
-    // Handle backspace
-    if (key && key.name === 'backspace') {
-      if (cursorPosition > 0) {
-        currentInput = currentInput.slice(0, cursorPosition - 1) + currentInput.slice(cursorPosition);
-        cursorPosition--;
-        renderScreen();
-      }
-      return;
-    }
-
-    // Handle Enter
-    if (key && key.name === 'return') {
-      const userInput = currentInput.trim();
-
-      // Handle empty input
-      if (!userInput) {
-        currentInput = '';
-        renderScreen();
-        return;
-      }
-
-      // Mark that user has typed once
-      if (!hasUserTypedOnce) {
-        hasUserTypedOnce = true;
-      }
-
-      // Check if this looks like a command attempt mixed with text
-      if (userInput.includes('/') && !userInput.startsWith('/')) {
-        // User typed text then /command - show a hint that it was treated as regular text
-        chatHistory.push({
-          role: 'assistant',
-          content: 'Note: Commands must start with / (e.g., /lang, /export). Your message was treated as regular text.'
-        });
-        renderScreen();
-      }
-
-      // Handle commands
-      if (userInput.toLowerCase() === '/exit' || userInput.toLowerCase() === '/quit') {
-        if (process.stdin.isTTY) {
-          process.stdin.setRawMode(false);
-        }
-        console.clear();
-        console.log(`\n${getMessage('chat_goodbye', locale)}\n`);
-        process.exit(0);
-      }
-
-      if (userInput.toLowerCase() === '/lang') {
-        isProcessing = true;
-        if (process.stdin.isTTY) {
-          process.stdin.setRawMode(false);
-        }
-        console.clear();
-
-        // Create a readline interface for the command handler
-        const rl = readline.createInterface({
-          input: process.stdin,
-          output: process.stdout,
-        });
-
-        await handleLangCommand(rl, locale);
-        rl.close();
-
-        // Re-setup keypress events after closing readline interface
-        if (process.stdin.isTTY) {
-          process.stdin.setRawMode(true);
-        }
-        readline.emitKeypressEvents(process.stdin);
-        process.stdin.resume();
-
-        currentInput = '';
-        cursorPosition = 0;
-        isProcessing = false;
-        renderScreen();
-        return;
-      }
-
-      if (userInput.toLowerCase() === '/export') {
-        isProcessing = true;
-        if (process.stdin.isTTY) {
-          process.stdin.setRawMode(false);
-        }
-        console.clear();
-
-        // Create a readline interface for the command handler
-        const rl = readline.createInterface({
-          input: process.stdin,
-          output: process.stdout,
-        });
-
-        await handleExportCommand(rl, conversationHistory, videoMetadata, youtubeUrl, locale);
-        rl.close();
-
-        // Re-setup keypress events after closing readline interface
-        if (process.stdin.isTTY) {
-          process.stdin.setRawMode(true);
-        }
-        readline.emitKeypressEvents(process.stdin);
-        process.stdin.resume();
-
-        currentInput = '';
-        cursorPosition = 0;
-        isProcessing = false;
-        renderScreen();
-        return;
-      }
-
-      // Handle regular message with AI agent
-      isProcessing = true;
-      currentInput = '';
-      cursorPosition = 0;
-
-      // Add user message to history
-      chatHistory.push({ role: 'user', content: userInput });
-
-      // Add to conversation history
-      conversationHistory.push({
-        timestamp: new Date(),
-        role: "user",
-        content: userInput,
-      });
-
-      // Add thinking indicator
-      chatHistory.push({ role: 'thinking', content: 'Thinking...' });
-
-      // Render with thinking indicator
-      renderScreen();
-
-      // Get AI response
-      try {
-        const response = await agent.invoke({
-          messages: [{ role: "user", content: userInput }],
-        });
-
-        const messages = response.messages;
-
-        // Filter to get ONLY AI/assistant messages (not tool calls or tool responses)
-        const aiMessages = messages.filter(msg => {
-          const msgType = msg._getType ? msg._getType() : msg.constructor.name;
-          return msgType === 'ai' || msgType === 'AIMessage';
-        });
-
-        // Get the last AI message (the final response)
-        const lastAIMessage = aiMessages.length > 0 ? aiMessages[aiMessages.length - 1] : messages[messages.length - 1];
-        const assistantContent = lastAIMessage.content;
-
-        // Add to conversation history
-        conversationHistory.push({
-          timestamp: new Date(),
-          role: "assistant",
-          content: assistantContent,
-          fullMessages: messages,
-        });
-
-        // Remove thinking indicator
-        chatHistory.pop();
-
-        // Add assistant response (store raw content, render on-demand)
-        chatHistory.push({ role: 'assistant', content: assistantContent, isMarkdown: true });
-
-      } catch (error) {
-        // Remove thinking indicator
-        chatHistory.pop();
-
-        // Add error message
-        chatHistory.push({ role: 'assistant', content: `Error: ${error.message}` });
-      }
-
-      // Reset state
-      isProcessing = false;
-      currentInput = '';
-
-      // Render final state
-      renderScreen();
-
-      return;
-    }
-
-    // Handle regular characters
-    if (str && !key.ctrl && !key.meta) {
-      // Mark that user has typed once
-      if (!hasUserTypedOnce) {
-        hasUserTypedOnce = true;
-      }
-
-      // Insert character at cursor position
-      currentInput = currentInput.slice(0, cursorPosition) + str + currentInput.slice(cursorPosition);
-      cursorPosition++;
-      renderScreen();
-    }
-  });
-
-  // Helper function to render screen
-  function renderScreen() {
-    // Show command suggestions if the current word (where cursor is) starts with "/"
-    let commandSuggestions = [];
-
-    // Find the word at cursor position
-    const beforeCursor = currentInput.substring(0, cursorPosition);
-    const lastSpaceIndex = beforeCursor.lastIndexOf(' ');
-    const currentWord = lastSpaceIndex === -1 ? beforeCursor : beforeCursor.substring(lastSpaceIndex + 1);
-
-    // Check if current word starts with "/"
-    if (currentWord.startsWith('/')) {
-      const commands = ['/lang', '/export', '/exit', '/quit'];
-      commandSuggestions = commands.filter(cmd => cmd.startsWith(currentWord) && cmd !== currentWord);
-    }
-
-    renderChatScreen(chatHistory, currentInput, hasUserTypedOnce, commandSuggestions, cursorPosition, isFirstRender);
-
-    // After first render, set flag to false so subsequent renders don't clear loading messages
-    if (isFirstRender) {
-      isFirstRender = false;
-    }
-  }
-
-  // Initial render (will NOT clear the console to preserve loading messages)
-  renderScreen();
-
-  // Return a promise that resolves when the user exits
-  // This keeps the function from returning and the process alive
-  return new Promise((resolve) => {
-    // Store the resolve function so exit handlers can call it
-    process.stdin.once('end', resolve);
-  });
 }
