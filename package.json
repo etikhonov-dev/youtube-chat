@@ -20,6 +20,7 @@
     "chalk": "^5.4.1",
     "cli-markdown": "^3.5.0",
     "clipboardy": "^5.0.0",
+    "enquirer": "^2.4.1",
     "get-user-locale": "^3.0.0",
     "langchain": "^1.0.1",
     "omelette": "^0.4.17",

@@ -1,8 +1,9 @@
 import readline from "readline";
-import omelette from "omelette";
 import { renderMarkdown, createSeparator } from "./console.js";
 import { handleLangCommand, handleExportCommand } from "./prompts.js";
 import { getMessage } from "../../localization.js";
+import { createInputHandler } from "./input-handler.js";
+import { getCommand, getAllCommandNames } from "./commands.js";
 
 // ANSI escape codes
 const DIM = '\x1b[2m';
@@ -50,18 +51,6 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
     }
   }
 
-  // Setup omelette shell completion (works outside of the readline interface)
-  const complete = omelette('youtube-chat');
-  complete.on('complete', (fragment, data) => {
-    if (fragment === '' || fragment === '/') {
-      data.reply(['/lang', '/export', '/exit', '/quit']);
-    } else if (fragment.startsWith('/')) {
-      const commands = ['/lang', '/export', '/exit', '/quit'];
-      data.reply(commands.filter(cmd => cmd.startsWith(fragment)));
-    }
-  });
-  complete.init();
-
   // Create readline interface with built-in tab completion
   const rl = readline.createInterface({
     input: process.stdin,
@@ -70,13 +59,51 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
     completer: (line) => {
       // Only autocomplete if line starts with /
       if (line.startsWith('/')) {
-        const commands = ['/lang', '/export', '/exit', '/quit'];
+        const commands = getAllCommandNames();
         const hits = commands.filter(cmd => cmd.startsWith(line));
         return [hits.length ? hits : commands, line];
       }
       return [[], line];
     }
   });
+
+  // Helper function to execute commands
+  const executeCommand = async (commandName) => {
+    console.clear();
+
+    switch (commandName) {
+      case '/export':
+        await handleExportCommand(rl, conversationHistory, videoMetadata, youtubeUrl, locale);
+        break;
+
+      case '/lang':
+        await handleLangCommand(rl, locale);
+        // Note: handleLangCommand may exit the process if config is changed
+        break;
+
+      case '/model':
+        // TODO: Implement model selection
+        console.log(`${DIM}Model selection coming soon...${RESET}\n`);
+        break;
+
+      case '/quit':
+      case '/exit':
+        rl.close();
+        console.clear();
+        console.log(`\n${getMessage('chat_goodbye', locale)}\n`);
+        process.exit(0);
+        break;
+    }
+
+    // Redisplay chat after command
+    displayChatHistory(chatHistory);
+    console.log('');
+    rl.prompt();
+  };
+
+  // Create input handler for "/" trigger
+  const inputHandler = createInputHandler(executeCommand);
+  inputHandler.attachKeypressHandler(rl);
 
   // Track if we need to redraw separator on resize
   let lastSeparator = createSeparator();
@@ -94,7 +121,7 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
 
   // Show initial separator and hint
   console.log(lastSeparator);
-  console.log(`${DIM}  Commands: /lang /export /exit${RESET}`);
+  console.log(`${DIM}  Commands: /export /lang /model /quit (Ctrl+C)${RESET}`);
   console.log(lastSeparator);
   console.log('');
 
@@ -112,32 +139,10 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
       return;
     }
 
-    // Handle exit commands
-    if (trimmed.toLowerCase() === '/exit' || trimmed.toLowerCase() === '/quit') {
-      rl.close();
-      console.clear();
-      console.log(`\n${getMessage('chat_goodbye', locale)}\n`);
-      process.exit(0);
-    }
-
-    // Handle /lang command
-    if (trimmed.toLowerCase() === '/lang') {
-      console.clear();
-      await handleLangCommand(rl, locale);
-      // Note: handleLangCommand may exit the process if config is changed
-      displayChatHistory(chatHistory);
-      console.log('');
-      rl.prompt();
-      return;
-    }
-
-    // Handle /export command
-    if (trimmed.toLowerCase() === '/export') {
-      console.clear();
-      await handleExportCommand(rl, conversationHistory, videoMetadata, youtubeUrl, locale);
-      displayChatHistory(chatHistory);
-      console.log('');
-      rl.prompt();
+    // Check if it's a command
+    const cmd = getCommand(trimmed);
+    if (cmd) {
+      await executeCommand(cmd.name);
       return;
     }
 
@@ -246,7 +251,7 @@ export async function startChatInterface() {
 
   console.log(`${DIM}Welcome! Type your message or use / for commands${RESET}\n`);
   console.log(createSeparator());
-  console.log(`${DIM}  Commands: /lang /export /exit${RESET}`);
+  console.log(`${DIM}  Commands: /export /lang /model /quit (Ctrl+C)${RESET}`);
   console.log(createSeparator());
   console.log('');
 
