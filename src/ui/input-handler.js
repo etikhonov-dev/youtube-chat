@@ -7,6 +7,9 @@ const BOLD_CYAN = '\x1b[1;36m';
 const DIM = '\x1b[2m';
 const RESET = '\x1b[0m';
 
+// Global flag to track if a selection prompt is active
+let selectionPromptActive = false;
+
 /**
  * Create enhanced input handler with command dropdown
  * @returns {Object} Input handler interface
@@ -128,6 +131,11 @@ export function createInputHandler() {
     process.stdin.on('keypress', (_str, key) => {
       if (!key) return;
 
+      // Don't handle events if a selection prompt is active
+      if (selectionPromptActive) {
+        return;
+      }
+
       // Handle dropdown navigation
       if (dropdownVisible && !isNavigating) {
         if (key.name === 'down') {
@@ -200,20 +208,50 @@ export function createSelectionPrompt(options, title, defaultIndex = 0) {
   return new Promise((resolve) => {
     let selectedIndex = defaultIndex;
     let promptVisible = true;
+    let totalLines = 0;
+    let dynamicLines = 0;
 
-    // Store original stdin state
-    const wasRawMode = process.stdin.isRaw;
+    // Mark selection prompt as active to prevent dropdown interference
+    selectionPromptActive = true;
+
+    // Store original stdin state (ensure it's a boolean)
+    const wasRawMode = Boolean(process.stdin.isRaw);
+
+    /**
+     * Clear dynamic menu lines (options + footer)
+     */
+    function clearDynamicLines() {
+      if (dynamicLines === 0) return;
+
+      // Move cursor up to start of dynamic content
+      process.stdout.write(`\x1b[${dynamicLines}A`);
+
+      // Clear each line
+      for (let i = 0; i < dynamicLines; i++) {
+        process.stdout.write('\x1b[2K'); // Clear current line
+        if (i < dynamicLines - 1) {
+          process.stdout.write('\x1b[1B'); // Move down one line
+        }
+      }
+
+      // Move cursor back to start of dynamic area
+      process.stdout.write(`\x1b[${dynamicLines - 1}A\r`);
+    }
 
     /**
      * Render the selection prompt
      */
-    function renderPrompt() {
-      // Clear screen
-      console.clear();
+    function renderPrompt(isInitial = false) {
+      if (!isInitial) {
+        clearDynamicLines();
+      }
 
-      // Title with modern minimal design
-      console.log(`\n${BOLD_CYAN}${title}${RESET}`);
-      console.log(`${DIM}${'─'.repeat(title.length)}${RESET}\n`);
+      if (isInitial) {
+        // Title with modern minimal design
+        process.stdout.write(`\n${BOLD_CYAN}${title}${RESET}\n`);
+        process.stdout.write(`${DIM}${'─'.repeat(title.length)}${RESET}\n\n\n`);
+        totalLines = 5; // blank + title + separator + 2 blanks
+      }
 
       // Render options
       options.forEach((option, index) => {
@@ -221,11 +259,50 @@ export function createSelectionPrompt(options, title, defaultIndex = 0) {
         const style = index === selectedIndex ? BOLD_CYAN : CYAN;
         const icon = option.icon ? `${option.icon} ` : '';
         const labelPadded = (icon + option.label).padEnd(25);
-        console.log(`${indicator}${style}${labelPadded}${RESET} ${DIM}${option.description}${RESET}`);
+        process.stdout.write(`${indicator}${style}${labelPadded}${RESET} ${DIM}${option.description}${RESET}\n`);
       });
 
       // Footer
-      console.log(`\n${DIM}↑/↓ • Enter • Esc${RESET}\n`);
+      process.stdout.write(`\n${DIM}Enter to confirm • Esc to cancel${RESET}\n`);
+
+      // Track dynamic lines (options + blank line + footer)
+      dynamicLines = options.length + 2;
+    }
+
+    /**
+     * Clean up and finalize
+     */
+    function finalize() {
+      // Move cursor up to the first line of dynamic content
+      if (dynamicLines > 0) {
+        process.stdout.write(`\x1b[${dynamicLines}A`);
+      }
+
+      // Clear all dynamic lines
+      for (let i = 0; i < dynamicLines; i++) {
+        process.stdout.write('\x1b[2K'); // Clear entire line
+        if (i < dynamicLines - 1) {
+          process.stdout.write('\x1b[1B'); // Move down
+        }
+      }
+
+      // Move up to start of static content (title area)
+      if (totalLines > 0) {
+        process.stdout.write(`\x1b[${totalLines}A`);
+      }
+
+      // Clear all static lines
+      for (let i = 0; i < totalLines; i++) {
+        process.stdout.write('\x1b[2K'); // Clear entire line
+        if (i < totalLines - 1) {
+          process.stdout.write('\x1b[1B'); // Move down
+        }
+      }
+
+      // Move cursor back to where menu started (top)
+      if (totalLines > 0) {
+        process.stdout.write(`\x1b[${totalLines}A\r`);
+      }
     }
 
     // Keypress handler
@@ -234,31 +311,39 @@ export function createSelectionPrompt(options, title, defaultIndex = 0) {
 
       if (key.name === 'down') {
         selectedIndex = (selectedIndex + 1) % options.length;
-        renderPrompt();
+        renderPrompt(false);
       } else if (key.name === 'up') {
         selectedIndex = selectedIndex === 0 ? options.length - 1 : selectedIndex - 1;
-        renderPrompt();
+        renderPrompt(false);
       } else if (key.name === 'return' || key.name === 'enter') {
         promptVisible = false;
+        finalize();
         // Clean up only our handler
         process.stdin.removeListener('keypress', keypressHandler);
         // Restore original raw mode state
         if (process.stdin.isTTY) {
           process.stdin.setRawMode(wasRawMode);
         }
+        // Mark selection prompt as inactive
+        selectionPromptActive = false;
         resolve(selectedIndex);
       } else if (key.name === 'escape') {
         promptVisible = false;
+        finalize();
         // Clean up only our handler
         process.stdin.removeListener('keypress', keypressHandler);
         // Restore original raw mode state
         if (process.stdin.isTTY) {
           process.stdin.setRawMode(wasRawMode);
         }
+        // Mark selection prompt as inactive
+        selectionPromptActive = false;
         resolve(null);
       } else if (key.ctrl && key.name === 'c') {
         promptVisible = false;
         process.stdin.removeListener('keypress', keypressHandler);
+        // Mark selection prompt as inactive before exiting
+        selectionPromptActive = false;
         process.exit(0);
       }
     };
@@ -269,7 +354,7 @@ export function createSelectionPrompt(options, title, defaultIndex = 0) {
     }
 
     // Initial render
-    renderPrompt();
+    renderPrompt(true);
 
     // Attach our keypress handler
     process.stdin.on('keypress', keypressHandler);
@@ -285,8 +370,11 @@ export function createSelectionPrompt(options, title, defaultIndex = 0) {
  */
 export function createTextPrompt(prompt, defaultValue = '', hint = '') {
   return new Promise((resolve) => {
-    // Store original stdin state
-    const wasRawMode = process.stdin.isRaw;
+    // Mark selection prompt as active to prevent dropdown interference
+    selectionPromptActive = true;
+
+    // Store original stdin state (ensure it's a boolean)
+    const wasRawMode = Boolean(process.stdin.isRaw);
 
     const rl = readline.createInterface({
       input: process.stdin,
@@ -330,7 +418,13 @@ export function createTextPrompt(prompt, defaultValue = '', hint = '') {
       }
       rl.close();
 
-      resolve(answer.trim() || defaultValue);
+      // Mark selection prompt as inactive
+      selectionPromptActive = false;
+
+      // Use setImmediate to resolve in next event loop iteration
+      setImmediate(() => {
+        resolve(answer.trim() || defaultValue);
+      });
     });
 
     rl.on('close', () => {
@@ -342,8 +436,12 @@ export function createTextPrompt(prompt, defaultValue = '', hint = '') {
 
       if (cancelled && !resolved) {
         resolved = true;
+        // Mark selection prompt as inactive
+        selectionPromptActive = false;
         console.log(`\n${DIM}Cancelled.${RESET}\n`);
-        resolve(null);
+        setImmediate(() => {
+          resolve(null);
+        });
       }
     });
   });

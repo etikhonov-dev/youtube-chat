@@ -5,6 +5,7 @@ import { padEndVisual } from "../utils/formatting.js";
 import { createSelectionPrompt, createTextPrompt } from "./input-handler.js";
 
 // ANSI escape codes
+const BOLD_CYAN = '\x1b[1;36m';
 const DIM = '\x1b[2m';
 const RESET = '\x1b[0m';
 
@@ -20,11 +21,11 @@ export async function handleExportCommand(conversationHistory, videoMetadata, yo
   const options = [
     {
       label: 'Copy to clipboard',
-      description: 'Copy the conversation to your system clipboard'
+      description: 'Quick access · Paste anywhere'
     },
     {
       label: 'Save to file',
-      description: 'Save the conversation to a file in the current directory'
+      description: 'Permanent record · Customize filename'
     }
   ];
 
@@ -39,6 +40,9 @@ export async function handleExportCommand(conversationHistory, videoMetadata, yo
     console.log(`\n${DIM}Cancelled.${RESET}\n`);
     return;
   }
+
+  // Give terminal time to complete menu cleanup before showing success message
+  await new Promise(resolve => setTimeout(resolve, 100));
 
   // Execute selected option
   if (selectedIndex === 0) {
@@ -58,12 +62,12 @@ export async function handleExportCommand(conversationHistory, videoMetadata, yo
  */
 async function promptForFileExport(conversationHistory, videoMetadata, youtubeUrl, locale) {
   const defaultFilename = getDefaultExportFilename();
-  const prompt = `Enter filename (or press Enter for default):\n${DIM}${defaultFilename}${RESET}`;
+  const prompt = `${BOLD_CYAN}Enter filename:${RESET}\n${DIM}Default: ${defaultFilename}${RESET}`;
 
   const filename = await createTextPrompt(
     prompt,
     defaultFilename,
-    'Esc to cancel'
+    'Press Enter to use default • Type custom name • Esc to cancel'
   );
 
   // User cancelled with Esc

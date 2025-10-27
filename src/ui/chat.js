@@ -95,8 +95,18 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
         break;
 
       case '/export':
+        // Clear readline display before showing export menu
+        rl.line = '';
+        rl.cursor = 0;
+        process.stdout.write('\r\x1b[K'); // Clear current line
+
         await handleExportCommand(conversationHistory, videoMetadata, youtubeUrl, locale);
-        break;
+
+        // Restore readline display after export
+        rl._refreshLine();
+        console.log('');
+        rl.prompt();
+        return;
 
       case '/lang':
         await handleLangCommand(rl, locale);
@@ -305,9 +315,15 @@ export async function startChatInterface() {
     }
 
     if (trimmed.toLowerCase() === '/export') {
-      console.clear();
+      // Clear readline display before showing export menu
+      rl.line = '';
+      rl.cursor = 0;
+      process.stdout.write('\r\x1b[K'); // Clear current line
+
       await handleExportCommand(chatHistory, {}, '', 'en');
-      displayHistory();
+
+      // Restore readline display after export
+      rl._refreshLine();
       console.log('');
       rl.prompt();
       return;
