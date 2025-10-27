@@ -102,6 +102,14 @@ const TRANSLATIONS = {
     summary_question: "What are the main topics covered?",
     summary_intro: "Based on the video \"{title}\", the main topics are:",
 
+    // Ready message and suggested questions
+    ready_message: "💬 Ready! Type /summarize for a quick overview, or ask any question.",
+    suggested_questions_header: "🎯 Suggested questions:",
+    suggested_question_1: "What is this video about?",
+    suggested_question_2: "What are the main points discussed?",
+    suggested_question_3: "Can you summarize the key arguments?",
+    suggested_question_4: "What conclusions does the author make?",
+
     // Role labels
     role_you: "You",
     role_assistant: "Assistant",
@@ -177,6 +185,14 @@ const TRANSLATIONS = {
     summary_generating: "🔄 Generando resumen...",
     summary_question: "¿Cuáles son los temas principales tratados?",
     summary_intro: "Basado en el video \"{title}\", los temas principales son:",
+
+    // Ready message and suggested questions
+    ready_message: "💬 ¡Listo! Escribe /summarize para un resumen rápido, o haz cualquier pregunta.",
+    suggested_questions_header: "🎯 Preguntas sugeridas:",
+    suggested_question_1: "¿De qué trata este video?",
+    suggested_question_2: "¿Cuáles son los puntos principales discutidos?",
+    suggested_question_3: "¿Puedes resumir los argumentos clave?",
+    suggested_question_4: "¿Qué conclusiones hace el autor?",
 
     // Role labels
     role_you: "Tú",

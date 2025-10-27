@@ -5,8 +5,8 @@ import { loadConfig } from "./src/services/config.js";
 import { extractVideoId } from "./src/utils/formatting.js";
 import { loadYouTubeTranscript, fetchVideoDuration, extractVideoMetadata } from "./src/core/youtube.js";
 import { createVectorStore } from "./src/core/vector-store.js";
-import { createAgent, generateSummary } from "./src/core/agent.js";
-import { displayUsage, displayVideoInfo, startSpinner, displaySummary, displayError } from "./src/ui/console.js";
+import { createAgent } from "./src/core/agent.js";
+import { displayUsage, displayVideoInfo, startSpinner, displayError } from "./src/ui/console.js";
 import { startChat } from "./src/ui/chat.js";
 
 // Suppress [YOUTUBEJS][Parser] and [YOUTUBEJS][Text] warnings
@@ -105,28 +105,7 @@ async function initialize(config) {
     // Create agent
     const agent = await createAgent(vectorStore, videoMetadata, language, userLocale);
 
-    // Generate summary (don't display it here - the new UI will show it)
-    const summarySpinner = startSpinner(getMessage('summary_generating', userLocale));
-    try {
-      const summaryContent = await generateSummary(agent, videoMetadata, userLocale);
-      summarySpinner.stop();
-      summarySpinner.clear();
-
-      // Add summary to conversation history
-      conversationHistory.push({
-        timestamp: new Date(),
-        role: "assistant",
-        content: summaryContent,
-      });
-    } catch (error) {
-      summarySpinner.fail();
-      displayError('error_generating_summary', userLocale, { error: error.message });
-    }
-
-    // Small delay to ensure spinner cleanup completes
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    // Start chat session with new conversational UI (preserve all loading messages above)
+    // Start chat session (summary generation is now on-demand via /summarize command)
     await startChat(agent, conversationHistory, videoMetadata, youtubeUrl, userLocale, language, transcriptLanguage);
   } catch (error) {
     displayError('error_general', currentLocale, { error: error.message });

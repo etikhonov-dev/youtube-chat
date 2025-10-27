@@ -13,6 +13,11 @@ const RESET = '\x1b[0m';
  */
 export const COMMANDS = [
   {
+    name: '/summarize',
+    description: 'Generate video summary',
+    aliases: [],
+  },
+  {
     name: '/export',
     description: 'Export conversation to file or clipboard',
     aliases: [],

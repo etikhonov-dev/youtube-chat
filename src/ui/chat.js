@@ -1,9 +1,10 @@
 import readline from "readline";
-import { renderMarkdown, createSeparator } from "./console.js";
+import { renderMarkdown, createSeparator, displaySummary, displayReadyMessage } from "./console.js";
 import { handleLangCommand, handleExportCommand } from "./prompts.js";
 import { getMessage } from "../../localization.js";
 import { createInputHandler } from "./input-handler.js";
 import { getCommand, getAllCommandNames } from "./commands.js";
+import { generateSummary } from "../core/agent.js";
 
 // ANSI escape codes
 const DIM = '\x1b[2m';
@@ -37,19 +38,8 @@ function displayChatHistory(chatHistory) {
  * @returns {Promise<void>}
  */
 export async function startChat(agent, conversationHistory, videoMetadata, youtubeUrl, locale, uiLanguage, transcriptLanguage) {
-  // State management - initialize with existing conversation history
+  // State management - start with empty chat history (no auto-summary)
   let chatHistory = [];
-  if (conversationHistory.length > 0) {
-    // Show the summary at the start
-    const summaryEntry = conversationHistory[0];
-    if (summaryEntry && summaryEntry.role === 'assistant') {
-      chatHistory.push({
-        role: 'assistant',
-        content: summaryEntry.content,
-        isMarkdown: true
-      });
-    }
-  }
 
   // Create readline interface with built-in tab completion
   const rl = readline.createInterface({
@@ -72,6 +62,33 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
     console.clear();
 
     switch (commandName) {
+      case '/summarize':
+        try {
+          console.log(`${DIM}${getMessage('summary_generating', locale)}${RESET}\n`);
+          const summaryContent = await generateSummary(agent, videoMetadata, locale);
+
+          // Add summary to conversation history
+          conversationHistory.push({
+            timestamp: new Date(),
+            role: "assistant",
+            content: summaryContent,
+          });
+
+          // Add to chat history
+          chatHistory.push({
+            role: 'assistant',
+            content: summaryContent,
+            isMarkdown: true
+          });
+
+          console.clear();
+          displaySummary(summaryContent, locale);
+        } catch (error) {
+          console.clear();
+          console.log(`${getMessage('error_generating_summary', locale, { error: error.message })}\n`);
+        }
+        break;
+
       case '/export':
         await handleExportCommand(rl, conversationHistory, videoMetadata, youtubeUrl, locale);
         break;
@@ -113,15 +130,12 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
     lastSeparator = createSeparator();
   });
 
-  // Display initial chat history if any
-  if (chatHistory.length > 0) {
-    displayChatHistory(chatHistory);
-    console.log(''); // Blank line after history
-  }
+  // Display ready message with suggested questions
+  displayReadyMessage(locale);
 
-  // Show initial separator and hint
+  // Show separator and commands hint
   console.log(lastSeparator);
-  console.log(`${DIM}  Commands: /export /lang /model /quit (Ctrl+C)${RESET}`);
+  console.log(`${DIM}  Commands: /summarize /export /lang /model /quit (Ctrl+C)${RESET}`);
   console.log(lastSeparator);
   console.log('');
 

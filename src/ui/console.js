@@ -45,6 +45,21 @@ export function displayVideoInfo(videoMetadata, locale) {
 }
 
 /**
+ * Display ready message with suggested questions
+ * @param {string} locale - Current locale
+ */
+export function displayReadyMessage(locale) {
+  console.log(getMessage('ready_message', locale));
+  console.log('');
+  console.log(getMessage('suggested_questions_header', locale));
+  console.log(`   • "${getMessage('suggested_question_1', locale)}"`);
+  console.log(`   • "${getMessage('suggested_question_2', locale)}"`);
+  console.log(`   • "${getMessage('suggested_question_3', locale)}"`);
+  console.log(`   • "${getMessage('suggested_question_4', locale)}"`);
+  console.log('');
+}
+
+/**
  * Display chat session header
  * @param {string} uiLanguage - UI language code
  * @param {string} transcriptLanguage - Transcript language code
