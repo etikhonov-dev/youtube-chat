@@ -2,6 +2,7 @@ import { getMessage, getLanguageEntries } from "../../localization.js";
 import { loadConfig, saveConfig } from "../services/config.js";
 import { exportToClipboard, exportToFile, getDefaultExportFilename } from "../services/export.js";
 import { padEndVisual } from "../utils/formatting.js";
+import { createSelectionPrompt, createTextPrompt } from "./input-handler.js";
 
 // ANSI escape codes
 const DIM = '\x1b[2m';
@@ -9,58 +10,68 @@ const RESET = '\x1b[0m';
 
 /**
  * Handle export command with user prompts
- * @param {Object} rl - Readline interface
  * @param {Array} conversationHistory - Array of conversation entries
  * @param {Object} videoMetadata - Video metadata object
  * @param {string} youtubeUrl - YouTube video URL
  * @param {string} locale - Current locale
  * @returns {Promise<void>}
  */
-export async function handleExportCommand(rl, conversationHistory, videoMetadata, youtubeUrl, locale) {
-  console.log("\n" + "=".repeat(60));
-  console.log(getMessage('export_header', locale));
-  console.log("=".repeat(60));
-  console.log(getMessage('export_select_method', locale));
-  console.log(getMessage('export_option_clipboard', locale));
-  console.log(getMessage('export_option_file', locale));
+export async function handleExportCommand(conversationHistory, videoMetadata, youtubeUrl, locale) {
+  const options = [
+    {
+      label: 'Copy to clipboard',
+      description: 'Copy the conversation to your system clipboard'
+    },
+    {
+      label: 'Save to file',
+      description: 'Save the conversation to a file in the current directory'
+    }
+  ];
 
-  return new Promise((resolve) => {
-    rl.question(getMessage('export_choice_prompt', locale), async (choice) => {
-      const selectedChoice = choice.trim();
+  const selectedIndex = await createSelectionPrompt(
+    options,
+    getMessage('export_header', locale),
+    0 // Default to clipboard
+  );
 
-      if (selectedChoice === "1") {
-        await exportToClipboard(conversationHistory, videoMetadata, youtubeUrl, locale);
-      } else if (selectedChoice === "2") {
-        await promptForFileExport(rl, conversationHistory, videoMetadata, youtubeUrl, locale);
-      } else {
-        console.log(`\n${getMessage('export_invalid_choice', locale)}\n`);
-      }
+  // User cancelled with Esc
+  if (selectedIndex === null) {
+    console.log(`\n${DIM}Cancelled.${RESET}\n`);
+    return;
+  }
 
-      resolve();
-    });
-  });
+  // Execute selected option
+  if (selectedIndex === 0) {
+    await exportToClipboard(conversationHistory, videoMetadata, youtubeUrl, locale);
+  } else if (selectedIndex === 1) {
+    await promptForFileExport(conversationHistory, videoMetadata, youtubeUrl, locale);
+  }
 }
 
 /**
  * Prompt user for file export
- * @param {Object} rl - Readline interface
  * @param {Array} conversationHistory - Array of conversation entries
  * @param {Object} videoMetadata - Video metadata object
  * @param {string} youtubeUrl - YouTube video URL
  * @param {string} locale - Current locale
  * @returns {Promise<void>}
  */
-async function promptForFileExport(rl, conversationHistory, videoMetadata, youtubeUrl, locale) {
+async function promptForFileExport(conversationHistory, videoMetadata, youtubeUrl, locale) {
   const defaultFilename = getDefaultExportFilename();
-  const prompt = getMessage('export_file_prompt', locale, { filename: defaultFilename });
+  const prompt = `Enter filename (or press Enter for default):\n${DIM}${defaultFilename}${RESET}`;
 
-  return new Promise((resolve) => {
-    rl.question(prompt, async (input) => {
-      const filename = input.trim() || defaultFilename;
-      await exportToFile(conversationHistory, videoMetadata, youtubeUrl, filename, locale);
-      resolve();
-    });
-  });
+  const filename = await createTextPrompt(
+    prompt,
+    defaultFilename,
+    'Esc to cancel'
+  );
+
+  // User cancelled with Esc
+  if (filename === null) {
+    return;
+  }
+
+  await exportToFile(conversationHistory, videoMetadata, youtubeUrl, filename, locale);
 }
 
 /**

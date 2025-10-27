@@ -95,7 +95,7 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
         break;
 
       case '/export':
-        await handleExportCommand(rl, conversationHistory, videoMetadata, youtubeUrl, locale);
+        await handleExportCommand(conversationHistory, videoMetadata, youtubeUrl, locale);
         break;
 
       case '/lang':
@@ -306,7 +306,7 @@ export async function startChatInterface() {
 
     if (trimmed.toLowerCase() === '/export') {
       console.clear();
-      await handleExportCommand(rl, chatHistory, {}, '', 'en');
+      await handleExportCommand(chatHistory, {}, '', 'en');
       displayHistory();
       console.log('');
       rl.prompt();
