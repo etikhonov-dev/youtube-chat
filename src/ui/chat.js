@@ -59,13 +59,16 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
 
   // Helper function to execute commands
   const executeCommand = async (commandName) => {
-    console.clear();
-
     switch (commandName) {
       case '/summarize':
         try {
-          console.log(`${DIM}${getMessage('summary_generating', locale)}${RESET}\n`);
+          // Show generating message with proper line handling for later cleanup
+          console.log(`${DIM}${getMessage('summary_generating', locale)}${RESET}`);
           const summaryContent = await generateSummary(agent, videoMetadata, locale);
+
+          // Clear the "Generating..." message line
+          process.stdout.write('\r\x1b[K');
+          process.stdout.write('\x1b[1A\r\x1b[K');
 
           // Add summary to conversation history
           conversationHistory.push({
@@ -81,10 +84,12 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
             isMarkdown: true
           });
 
-          console.clear();
-          displaySummary(summaryContent, locale);
+          // Summary will be displayed by displayChatHistory() below
         } catch (error) {
-          console.clear();
+          // Clear the "Generating..." message line if it exists
+          process.stdout.write('\r\x1b[K');
+          process.stdout.write('\x1b[1A\r\x1b[K');
+
           console.log(`${getMessage('error_generating_summary', locale, { error: error.message })}\n`);
         }
         break;

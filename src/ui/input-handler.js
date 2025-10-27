@@ -73,7 +73,7 @@ export function createInputHandler() {
     });
 
     // Footer
-    lines.push(`${DIM}↑/↓ or j/k • Tab/Enter • Esc${RESET}`);
+    lines.push(`${DIM}↑/↓ • Tab/Enter • Esc${RESET}`);
 
     // Calculate cursor position for restoration
     const promptLength = rl._prompt.length;
@@ -140,22 +140,6 @@ export function createInputHandler() {
         }
 
         if (key.name === 'up') {
-          isNavigating = true;
-          selectedIndex = selectedIndex === 0 ? filteredCommands.length - 1 : selectedIndex - 1;
-          renderDropdown(rl.line, rl);
-          isNavigating = false;
-          return;
-        }
-
-        if (key.name === 'j' && !key.ctrl && !key.meta) {
-          isNavigating = true;
-          selectedIndex = (selectedIndex + 1) % filteredCommands.length;
-          renderDropdown(rl.line, rl);
-          isNavigating = false;
-          return;
-        }
-
-        if (key.name === 'k' && !key.ctrl && !key.meta) {
           isNavigating = true;
           selectedIndex = selectedIndex === 0 ? filteredCommands.length - 1 : selectedIndex - 1;
           renderDropdown(rl.line, rl);
