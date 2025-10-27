@@ -102,7 +102,7 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
   };
 
   // Create input handler for "/" trigger
-  const inputHandler = createInputHandler(executeCommand);
+  const inputHandler = createInputHandler();
   inputHandler.attachKeypressHandler(rl);
 
   // Track if we need to redraw separator on resize
@@ -248,6 +248,10 @@ export async function startChatInterface() {
   });
 
   let chatHistory = [];
+
+  // Create input handler for "/" trigger
+  const inputHandler = createInputHandler();
+  inputHandler.attachKeypressHandler(rl);
 
   console.log(`${DIM}Welcome! Type your message or use / for commands${RESET}\n`);
   console.log(createSeparator());

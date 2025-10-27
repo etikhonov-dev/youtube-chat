@@ -1,7 +1,5 @@
 import readline from 'readline';
-import enquirer from 'enquirer';
-const { AutoComplete } = enquirer;
-import { COMMANDS, formatCommand } from './commands.js';
+import { COMMANDS } from './commands.js';
 
 // ANSI escape codes
 const CYAN = '\x1b[36m';
@@ -11,87 +9,109 @@ const RESET = '\x1b[0m';
 
 /**
  * Create enhanced input handler with command dropdown
- * @param {Function} onCommand - Callback when command selected: (commandName) => Promise<void>
  * @returns {Object} Input handler interface
  */
-export function createInputHandler(onCommand) {
-  let dropdownActive = false;
+export function createInputHandler() {
+  let dropdownVisible = false;
+  let selectedIndex = 0;
+  let filteredCommands = [];
+  let dropdownLines = 0;
 
   /**
-   * Show command dropdown when "/" is typed
-   * @param {string} partialInput - Partial command input (e.g., "/", "/ex")
+   * Clear dropdown from screen
    */
-  async function showCommandDropdown(partialInput = '/') {
-    if (dropdownActive) return;
-    dropdownActive = true;
+  function clearDropdown() {
+    if (!dropdownVisible || dropdownLines === 0) return;
 
-    try {
-      // Filter commands based on partial input
-      const matchingCommands = COMMANDS.filter(cmd =>
-        cmd.name.startsWith(partialInput.toLowerCase())
-      );
-
-      if (matchingCommands.length === 0) {
-        dropdownActive = false;
-        return;
-      }
-
-      // Single match - auto-complete if exact match
-      if (matchingCommands.length === 1 && matchingCommands[0].name === partialInput.toLowerCase()) {
-        const selected = matchingCommands[0].name;
-        dropdownActive = false;
-        await onCommand(selected);
-        return;
-      }
-
-      // Create autocomplete prompt with programmer-friendly styling
-      const prompt = new AutoComplete({
-        name: 'command',
-        message: '',
-        limit: 10,
-        initial: 0,
-        choices: matchingCommands.map(cmd => ({
-          name: cmd.name,
-          message: formatCommand(cmd),
-          value: cmd.name,
-        })),
-        styles: {
-          primary: (str) => `${CYAN}${str}${RESET}`,
-          selected: (str) => `${BOLD_CYAN}${str}${RESET}`,
-          em: (str) => `\x1b[1m${str}${RESET}`,
-        },
-        symbols: {
-          indicator: `${CYAN}❯${RESET}`,
-          pointer: `${CYAN}›${RESET}`,
-        },
-        footer() {
-          return `${DIM}↑/↓ or j/k • Enter • Esc${RESET}`;
-        },
-      });
-
-      // Override keypress for vim-style navigation
-      const originalKeypress = prompt.keypress.bind(prompt);
-      prompt.keypress = async function(input, key = {}) {
-        // Vim keybindings for programmers
-        if (key.name === 'j') {
-          this.next();
-          return;
-        }
-        if (key.name === 'k') {
-          this.prev();
-          return;
-        }
-        // Call original keypress handler
-        return originalKeypress(input, key);
-      };
-
-      const selected = await prompt.run();
-      await onCommand(selected);
-    } catch (error) {
-      // User cancelled (Esc) - do nothing
-    } finally {
-      dropdownActive = false;
+    // Clear the dropdown lines below the input
+    for (let i = 0; i < dropdownLines; i++) {
+      process.stdout.write('\n\x1b[2K'); // Move down and clear line
     }
+    // Move cursor back up to original position
+    process.stdout.write(`\x1b[${dropdownLines}A\r`); // Move up and to start of line
+
+    dropdownVisible = false;
+    dropdownLines = 0;
+  }
+
+  /**
+   * Render dropdown below current line
+   * @param {string} currentInput - Current input text (e.g., "/exp")
+   * @param {Object} rl - Readline interface
+   */
+  function renderDropdown(currentInput, rl) {
+    // Filter commands based on input
+    const searchTerm = currentInput.toLowerCase();
+    filteredCommands = COMMANDS.filter(cmd =>
+      cmd.name.startsWith(searchTerm)
+    );
+
+    if (filteredCommands.length === 0) {
+      if (dropdownVisible) {
+        clearDropdown();
+      }
+      return;
+    }
+
+    // Ensure selected index is valid
+    if (selectedIndex >= filteredCommands.length) {
+      selectedIndex = 0;
+    }
+
+    // Clear previous dropdown if visible
+    if (dropdownVisible) {
+      clearDropdown();
+    }
+
+    // Build dropdown lines
+    const lines = [];
+    filteredCommands.forEach((cmd, index) => {
+      const indicator = index === selectedIndex ? `${CYAN}❯${RESET} ` : '  ';
+      const style = index === selectedIndex ? BOLD_CYAN : CYAN;
+      const namePadded = cmd.name.padEnd(10);
+      lines.push(`${indicator}${style}${namePadded}${RESET} ${DIM}${cmd.description}${RESET}`);
+    });
+
+    // Footer
+    lines.push(`${DIM}↑/↓ or j/k • Tab/Enter • Esc${RESET}`);
+
+    // Calculate cursor position for restoration
+    const promptLength = rl._prompt.length;
+    const inputLength = rl.line.length;
+    const cursorPosition = promptLength + rl.cursor;
+
+    // Write dropdown below current line
+    lines.forEach(line => {
+      process.stdout.write('\n' + line);
+    });
+
+    dropdownLines = lines.length;
+    dropdownVisible = true;
+
+    // Move cursor back up to input line
+    process.stdout.write(`\x1b[${dropdownLines}A`);
+    // Move cursor to correct column position
+    process.stdout.write(`\r\x1b[${cursorPosition}C`);
+  }
+
+  /**
+   * Accept selected command
+   * @param {Object} rl - Readline interface
+   */
+  function acceptCommand(rl) {
+    if (!dropdownVisible || filteredCommands.length === 0) return false;
+
+    const selected = filteredCommands[selectedIndex];
+
+    // Clear dropdown
+    clearDropdown();
+
+    // Update readline with selected command
+    rl.line = selected.name;
+    rl.cursor = selected.name.length;
+    rl._refreshLine();
+
+    return true;
   }
 
   /**
@@ -102,37 +122,86 @@ export function createInputHandler(onCommand) {
     // Enable keypress events
     readline.emitKeypressEvents(process.stdin, rl);
 
-    // Monitor cursor position and input changes
+    // Track last line content
     let lastLine = '';
-    const checkInput = () => {
-      const currentLine = rl.line;
+    let isNavigating = false;
 
-      // Check if user just typed "/" at the start
-      if (currentLine === '/' && lastLine === '' && !dropdownActive) {
-        // Show dropdown without clearing the "/"
-        setImmediate(async () => {
-          await showCommandDropdown('/');
-          // Restore prompt after dropdown closes
-          if (!dropdownActive) {
-            rl.prompt();
-          }
-        });
+    process.stdin.on('keypress', (_str, key) => {
+      if (!key) return;
+
+      // Handle dropdown navigation
+      if (dropdownVisible && !isNavigating) {
+        if (key.name === 'down') {
+          isNavigating = true;
+          selectedIndex = (selectedIndex + 1) % filteredCommands.length;
+          renderDropdown(rl.line, rl);
+          isNavigating = false;
+          return;
+        }
+
+        if (key.name === 'up') {
+          isNavigating = true;
+          selectedIndex = selectedIndex === 0 ? filteredCommands.length - 1 : selectedIndex - 1;
+          renderDropdown(rl.line, rl);
+          isNavigating = false;
+          return;
+        }
+
+        if (key.name === 'j' && !key.ctrl && !key.meta) {
+          isNavigating = true;
+          selectedIndex = (selectedIndex + 1) % filteredCommands.length;
+          renderDropdown(rl.line, rl);
+          isNavigating = false;
+          return;
+        }
+
+        if (key.name === 'k' && !key.ctrl && !key.meta) {
+          isNavigating = true;
+          selectedIndex = selectedIndex === 0 ? filteredCommands.length - 1 : selectedIndex - 1;
+          renderDropdown(rl.line, rl);
+          isNavigating = false;
+          return;
+        }
+
+        if (key.name === 'tab') {
+          acceptCommand(rl);
+          return;
+        }
+
+        if (key.name === 'escape') {
+          clearDropdown();
+          rl._refreshLine();
+          return;
+        }
       }
 
-      lastLine = currentLine;
-    };
+      // Update dropdown on regular input (after readline processes the key)
+      setImmediate(() => {
+        const line = rl.line;
 
-    // Use interval to check for input changes (lightweight approach)
-    const checkInterval = setInterval(checkInput, 50);
+        if (line !== lastLine && !isNavigating) {
+          if (line.startsWith('/') && line.length > 0) {
+            selectedIndex = 0;
+            renderDropdown(line, rl);
+          } else if (dropdownVisible) {
+            clearDropdown();
+            rl._refreshLine();
+          }
+          lastLine = line;
+        }
+      });
+    });
 
     // Clean up on close
     rl.on('close', () => {
-      clearInterval(checkInterval);
+      if (dropdownVisible) {
+        clearDropdown();
+      }
     });
   }
 
   return {
     attachKeypressHandler,
-    showCommandDropdown,
+    clearDropdown,
   };
 }
