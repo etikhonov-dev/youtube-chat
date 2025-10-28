@@ -106,9 +106,14 @@ async function initialize(config) {
     const agent = await createAgent(vectorStore, videoMetadata, language, userLocale);
 
     // Start chat session (summary generation is now on-demand via /summarize command)
+    // This is an interactive session that will keep running until user exits
     await startChat(agent, conversationHistory, videoMetadata, youtubeUrl, userLocale, language, transcriptLanguage);
   } catch (error) {
     displayError('error_general', currentLocale, { error: error.message });
     process.exit(1);
   }
-})();
+})().catch((error) => {
+  // Catch any unhandled promise rejections from the top-level await
+  console.error('Unhandled error:', error);
+  process.exit(1);
+});

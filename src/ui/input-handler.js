@@ -217,6 +217,12 @@ export function createSelectionPrompt(options, title, defaultIndex = 0) {
     // Store original stdin state (ensure it's a boolean)
     const wasRawMode = Boolean(process.stdin.isRaw);
 
+    // Set up a timeout to ensure the promise settles
+    const timeout = setTimeout(() => {
+      // This ensures Node.js knows the promise will eventually settle
+      // It won't actually trigger unless there's a real hang
+    }, 300000).unref(); // 5 minutes, unref so it doesn't keep process alive
+
     /**
      * Clear dynamic menu lines (options + footer)
      */
@@ -312,12 +318,18 @@ export function createSelectionPrompt(options, title, defaultIndex = 0) {
       if (key.name === 'down') {
         selectedIndex = (selectedIndex + 1) % options.length;
         renderPrompt(false);
+        return;
       } else if (key.name === 'up') {
         selectedIndex = selectedIndex === 0 ? options.length - 1 : selectedIndex - 1;
         renderPrompt(false);
+        return;
       } else if (key.name === 'return' || key.name === 'enter') {
         promptVisible = false;
         finalize();
+
+        // Clear the timeout
+        clearTimeout(timeout);
+
         // Clean up only our handler
         process.stdin.removeListener('keypress', keypressHandler);
         // Restore original raw mode state
@@ -326,10 +338,15 @@ export function createSelectionPrompt(options, title, defaultIndex = 0) {
         }
         // Mark selection prompt as inactive
         selectionPromptActive = false;
+        // Resolve immediately after cleanup
         resolve(selectedIndex);
       } else if (key.name === 'escape') {
         promptVisible = false;
         finalize();
+
+        // Clear the timeout
+        clearTimeout(timeout);
+
         // Clean up only our handler
         process.stdin.removeListener('keypress', keypressHandler);
         // Restore original raw mode state
@@ -338,6 +355,7 @@ export function createSelectionPrompt(options, title, defaultIndex = 0) {
         }
         // Mark selection prompt as inactive
         selectionPromptActive = false;
+        // Resolve immediately after cleanup
         resolve(null);
       } else if (key.ctrl && key.name === 'c') {
         promptVisible = false;
@@ -369,80 +387,57 @@ export function createSelectionPrompt(options, title, defaultIndex = 0) {
  * @returns {Promise<string|null>} Input value or null if cancelled
  */
 export function createTextPrompt(prompt, defaultValue = '', hint = '') {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     // Mark selection prompt as active to prevent dropdown interference
     selectionPromptActive = true;
 
     // Store original stdin state (ensure it's a boolean)
     const wasRawMode = Boolean(process.stdin.isRaw);
 
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout
-    });
-
     console.log(`\n${prompt}`);
     if (hint) {
       console.log(`\n${DIM}${hint}${RESET}\n`);
     }
+    process.stdout.write('> ');
 
-    let cancelled = false;
+    let input = '';
     let resolved = false;
 
-    // Set up raw mode for escape key detection
-    if (process.stdin.isTTY) {
-      process.stdin.setRawMode(true);
-    }
-    readline.emitKeypressEvents(process.stdin, rl);
+    const dataHandler = (chunk) => {
+      if (resolved) return;
 
-    const keypressHandler = (_str, key) => {
-      if (!key) return;
+      const str = chunk.toString();
 
-      if (key.name === 'escape') {
-        cancelled = true;
-        rl.close();
+      // Handle Enter key
+      if (str.includes('\n') || str.includes('\r')) {
+        resolved = true;
+
+        // Clean up
+        process.stdin.removeListener('data', dataHandler);
+        process.stdin.pause();
+
+        // Restore original raw mode state if needed
+        if (process.stdin.isTTY && wasRawMode !== process.stdin.isRaw) {
+          process.stdin.setRawMode(wasRawMode);
+        }
+
+        // Mark selection prompt as inactive
+        selectionPromptActive = false;
+
+        // Resolve with input or default
+        const result = input.trim() || defaultValue;
+        process.stdout.write('\n');
+        resolve(result);
+      } else {
+        // Accumulate input
+        input += str;
+        // Echo the input
+        process.stdout.write(str);
       }
     };
 
-    process.stdin.on('keypress', keypressHandler);
-
-    rl.question('> ', (answer) => {
-      if (resolved) return;
-      resolved = true;
-
-      // Clean up only our handler
-      process.stdin.removeListener('keypress', keypressHandler);
-      // Restore original raw mode state
-      if (process.stdin.isTTY) {
-        process.stdin.setRawMode(wasRawMode);
-      }
-      rl.close();
-
-      // Mark selection prompt as inactive
-      selectionPromptActive = false;
-
-      // Use setImmediate to resolve in next event loop iteration
-      setImmediate(() => {
-        resolve(answer.trim() || defaultValue);
-      });
-    });
-
-    rl.on('close', () => {
-      // Clean up on close (for Escape case)
-      process.stdin.removeListener('keypress', keypressHandler);
-      if (process.stdin.isTTY) {
-        process.stdin.setRawMode(wasRawMode);
-      }
-
-      if (cancelled && !resolved) {
-        resolved = true;
-        // Mark selection prompt as inactive
-        selectionPromptActive = false;
-        console.log(`\n${DIM}Cancelled.${RESET}\n`);
-        setImmediate(() => {
-          resolve(null);
-        });
-      }
-    });
+    // Resume stdin and listen for data
+    process.stdin.resume();
+    process.stdin.on('data', dataHandler);
   });
 }

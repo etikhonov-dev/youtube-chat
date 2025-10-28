@@ -95,6 +95,9 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
         break;
 
       case '/export':
+        // Pause readline to prevent any input processing
+        rl.pause();
+
         // Clear readline display before showing export menu
         rl.line = '';
         rl.cursor = 0;
@@ -102,7 +105,16 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
 
         await handleExportCommand(conversationHistory, videoMetadata, youtubeUrl, locale);
 
+        // Give time for any pending input to be flushed
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        // Resume readline
+        rl.resume();
+
         // Restore readline display after export
+        rl.line = '';
+        rl.cursor = 0;
+        rl.historyIndex = -1; // Reset history position
         rl._refreshLine();
         console.log('');
         rl.prompt();
@@ -315,6 +327,9 @@ export async function startChatInterface() {
     }
 
     if (trimmed.toLowerCase() === '/export') {
+      // Pause readline to prevent any input processing
+      rl.pause();
+
       // Clear readline display before showing export menu
       rl.line = '';
       rl.cursor = 0;
@@ -322,7 +337,16 @@ export async function startChatInterface() {
 
       await handleExportCommand(chatHistory, {}, '', 'en');
 
+      // Give time for any pending input to be flushed
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      // Resume readline
+      rl.resume();
+
       // Restore readline display after export
+      rl.line = '';
+      rl.cursor = 0;
+      rl.historyIndex = -1; // Reset history position
       rl._refreshLine();
       console.log('');
       rl.prompt();

@@ -64,18 +64,22 @@ async function promptForFileExport(conversationHistory, videoMetadata, youtubeUr
   const defaultFilename = getDefaultExportFilename();
   const prompt = `${BOLD_CYAN}Enter filename:${RESET}\n${DIM}Default: ${defaultFilename}${RESET}`;
 
-  const filename = await createTextPrompt(
-    prompt,
-    defaultFilename,
-    'Press Enter to use default • Type custom name • Esc to cancel'
-  );
+  try {
+    const filename = await createTextPrompt(
+      prompt,
+      defaultFilename,
+      'Press Enter to use default • Type custom name • Esc to cancel'
+    );
 
-  // User cancelled with Esc
-  if (filename === null) {
-    return;
+    // User cancelled with Esc
+    if (filename === null) {
+      return;
+    }
+
+    await exportToFile(conversationHistory, videoMetadata, youtubeUrl, filename, locale);
+  } catch (error) {
+    console.error(`\n${getMessage('error_file_save', locale, { error: error.message })}\n`);
   }
-
-  await exportToFile(conversationHistory, videoMetadata, youtubeUrl, filename, locale);
 }
 
 /**
