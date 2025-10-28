@@ -19,6 +19,7 @@ export function createInputHandler() {
   let selectedIndex = 0;
   let filteredCommands = [];
   let dropdownLines = 0;
+  let lastLine = ''; // Track last line for dropdown trigger detection
 
   /**
    * Clear dropdown from screen
@@ -75,8 +76,7 @@ export function createInputHandler() {
       lines.push(`${indicator}${style}${namePadded}${RESET} ${DIM}${cmd.description}${RESET}`);
     });
 
-    // Footer
-    lines.push(`${DIM}↑/↓ • Tab/Enter • Esc${RESET}`);
+    // No footer - hints removed
 
     // Calculate cursor position for restoration
     const promptLength = rl._prompt.length;
@@ -108,10 +108,12 @@ export function createInputHandler() {
     // Clear dropdown
     clearDropdown();
 
-    // Update readline with selected command
-    rl.line = selected.name;
-    rl.cursor = selected.name.length;
-    rl._refreshLine();
+    // Emit 'line' event to execute the command without displaying it
+    rl.emit('line', selected.name);
+
+    // Clear the readline buffer to prevent command from appearing after execution
+    rl.line = '';
+    rl.cursor = 0;
 
     return true;
   }
@@ -124,8 +126,6 @@ export function createInputHandler() {
     // Enable keypress events
     readline.emitKeypressEvents(process.stdin, rl);
 
-    // Track last line content
-    let lastLine = '';
     let isNavigating = false;
 
     process.stdin.on('keypress', (_str, key) => {
@@ -154,7 +154,7 @@ export function createInputHandler() {
           return;
         }
 
-        if (key.name === 'tab') {
+        if (key.name === 'tab' || key.name === 'return') {
           acceptCommand(rl);
           return;
         }
@@ -191,9 +191,19 @@ export function createInputHandler() {
     });
   }
 
+  /**
+   * Reset internal state (useful after commands execute)
+   */
+  function resetState() {
+    lastLine = '';
+    selectedIndex = 0;
+  }
+
   return {
     attachKeypressHandler,
     clearDropdown,
+    isDropdownVisible: () => dropdownVisible,
+    resetState,
   };
 }
 
@@ -391,7 +401,7 @@ export function createSelectionPrompt(options, title, defaultIndex = 0) {
  * @returns {Promise<string|null>} Input value or null if cancelled
  */
 export function createTextPrompt(prompt, defaultValue = '', hint = '') {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     // Mark selection prompt as active to prevent dropdown interference
     selectionPromptActive = true;
 

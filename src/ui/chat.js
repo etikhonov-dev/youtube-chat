@@ -57,6 +57,10 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
     }
   });
 
+  // Create input handler for "/" trigger (before executeCommand so it can use it)
+  const inputHandler = createInputHandler();
+  inputHandler.attachKeypressHandler(rl);
+
   // Helper function to execute commands
   const executeCommand = async (commandName) => {
     switch (commandName) {
@@ -84,7 +88,15 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
             isMarkdown: true
           });
 
-          // Summary will be displayed by displayChatHistory() below
+          // Display the summary immediately (don't wait for displayChatHistory below)
+          console.log('');
+          console.log(renderMarkdown(summaryContent));
+
+          // Skip the redisplay logic below by showing prompt directly
+          console.log('');
+          inputHandler.resetState();
+          rl.prompt();
+          return; // Early return to avoid redisplaying chat history
         } catch (error) {
           // Clear the "Generating..." message line if it exists
           process.stdout.write('\r\x1b[K');
@@ -110,8 +122,8 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
         rl.line = '';
         rl.cursor = 0;
         rl.historyIndex = -1; // Reset history position
-        rl._refreshLine();
         console.log('');
+        inputHandler.resetState();
         rl.prompt();
         return;
 
@@ -123,7 +135,9 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
       case '/model':
         // TODO: Implement model selection
         console.log(`${DIM}Model selection coming soon...${RESET}\n`);
-        break;
+        inputHandler.resetState();
+        rl.prompt();
+        return; // Early return
 
       case '/quit':
       case '/exit':
@@ -133,15 +147,12 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
         process.exit(0);
     }
 
-    // Redisplay chat after command
+    // Fallback: redisplay chat history after command (shouldn't normally reach here)
     displayChatHistory(chatHistory);
     console.log('');
+    inputHandler.resetState(); // Reset input handler state for fresh input
     rl.prompt();
   };
-
-  // Create input handler for "/" trigger
-  const inputHandler = createInputHandler();
-  inputHandler.attachKeypressHandler(rl);
 
   // Track if we need to redraw separator on resize
   let lastSeparator = createSeparator();
@@ -166,6 +177,11 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
 
   // Handle line input
   rl.on('line', async (input) => {
+    // Ignore line events when dropdown is visible - keypress handler will handle it
+    if (inputHandler.isDropdownVisible()) {
+      return;
+    }
+
     const trimmed = input.trim();
 
     // Handle empty input
@@ -177,6 +193,9 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
     // Check if it's a command
     const cmd = getCommand(trimmed);
     if (cmd) {
+      // Move up one line, clear it, then display the full command
+      process.stdout.write('\x1b[1A\r\x1b[K');
+      console.log(`> ${cmd.name}`);
       await executeCommand(cmd.name);
       return;
     }
@@ -243,6 +262,7 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
 
     // Show clean prompt for next input
     console.log('');
+    inputHandler.resetState();
     rl.prompt();
   });
 
@@ -297,6 +317,11 @@ export async function startChatInterface() {
   rl.prompt();
 
   rl.on('line', async (input) => {
+    // Ignore line events when dropdown is visible - keypress handler will handle it
+    if (inputHandler.isDropdownVisible()) {
+      return;
+    }
+
     const trimmed = input.trim();
 
     if (!trimmed) {
@@ -305,6 +330,8 @@ export async function startChatInterface() {
     }
 
     if (trimmed.toLowerCase() === '/exit' || trimmed.toLowerCase() === '/quit') {
+      process.stdout.write('\x1b[1A\r\x1b[K');
+      console.log(`> ${trimmed}`);
       rl.close();
       console.clear();
       console.log("\nGoodbye!\n");
@@ -312,15 +339,20 @@ export async function startChatInterface() {
     }
 
     if (trimmed.toLowerCase() === '/lang') {
+      process.stdout.write('\x1b[1A\r\x1b[K');
+      console.log(`> ${trimmed}`);
       console.clear();
       await handleLangCommand(rl, 'en');
       displayHistory();
       console.log('');
+      inputHandler.resetState();
       rl.prompt();
       return;
     }
 
     if (trimmed.toLowerCase() === '/export') {
+      process.stdout.write('\x1b[1A\r\x1b[K');
+      console.log(`> ${trimmed}`);
       // Clear readline display before showing export menu
       // Note: We don't pause readline - the selectionPromptActive flag prevents interference
       rl.line = '';
@@ -336,8 +368,8 @@ export async function startChatInterface() {
       rl.line = '';
       rl.cursor = 0;
       rl.historyIndex = -1; // Reset history position
-      rl._refreshLine();
       console.log('');
+      inputHandler.resetState();
       rl.prompt();
       return;
     }
@@ -356,6 +388,7 @@ export async function startChatInterface() {
       console.log('');
       console.log(response);
       console.log('');
+      inputHandler.resetState();
       rl.prompt();
     }, 1000);
   });
