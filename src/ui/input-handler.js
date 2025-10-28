@@ -336,6 +336,8 @@ export function createSelectionPrompt(options, title, defaultIndex = 0) {
         if (process.stdin.isTTY) {
           process.stdin.setRawMode(wasRawMode);
         }
+        // Ensure stdin remains an active handle to prevent event loop from becoming empty
+        process.stdin.resume();
         // Mark selection prompt as inactive
         selectionPromptActive = false;
         // Resolve immediately after cleanup
@@ -353,6 +355,8 @@ export function createSelectionPrompt(options, title, defaultIndex = 0) {
         if (process.stdin.isTTY) {
           process.stdin.setRawMode(wasRawMode);
         }
+        // Ensure stdin remains an active handle to prevent event loop from becoming empty
+        process.stdin.resume();
         // Mark selection prompt as inactive
         selectionPromptActive = false;
         // Resolve immediately after cleanup
@@ -414,12 +418,14 @@ export function createTextPrompt(prompt, defaultValue = '', hint = '') {
 
         // Clean up
         process.stdin.removeListener('data', dataHandler);
-        process.stdin.pause();
 
         // Restore original raw mode state if needed
         if (process.stdin.isTTY && wasRawMode !== process.stdin.isRaw) {
           process.stdin.setRawMode(wasRawMode);
         }
+
+        // Ensure stdin remains an active handle to prevent event loop from becoming empty
+        // (Don't pause - let readline manage stdin state)
 
         // Mark selection prompt as inactive
         selectionPromptActive = false;

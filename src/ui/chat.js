@@ -95,10 +95,8 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
         break;
 
       case '/export':
-        // Pause readline to prevent any input processing
-        rl.pause();
-
         // Clear readline display before showing export menu
+        // Note: We don't pause readline - the selectionPromptActive flag prevents interference
         rl.line = '';
         rl.cursor = 0;
         process.stdout.write('\r\x1b[K'); // Clear current line
@@ -107,9 +105,6 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
 
         // Give time for any pending input to be flushed
         await new Promise(resolve => setTimeout(resolve, 50));
-
-        // Resume readline
-        rl.resume();
 
         // Restore readline display after export
         rl.line = '';
@@ -136,7 +131,6 @@ export async function startChat(agent, conversationHistory, videoMetadata, youtu
         console.clear();
         console.log(`\n${getMessage('chat_goodbye', locale)}\n`);
         process.exit(0);
-        break;
     }
 
     // Redisplay chat after command
@@ -327,10 +321,8 @@ export async function startChatInterface() {
     }
 
     if (trimmed.toLowerCase() === '/export') {
-      // Pause readline to prevent any input processing
-      rl.pause();
-
       // Clear readline display before showing export menu
+      // Note: We don't pause readline - the selectionPromptActive flag prevents interference
       rl.line = '';
       rl.cursor = 0;
       process.stdout.write('\r\x1b[K'); // Clear current line
@@ -339,9 +331,6 @@ export async function startChatInterface() {
 
       // Give time for any pending input to be flushed
       await new Promise(resolve => setTimeout(resolve, 50));
-
-      // Resume readline
-      rl.resume();
 
       // Restore readline display after export
       rl.line = '';
