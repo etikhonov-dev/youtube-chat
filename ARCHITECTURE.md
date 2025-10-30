@@ -1,4 +1,4 @@
-# YouTube Chat - Architecture Documentation
+# YouTube CLI Companion - Architecture Documentation
 
 ## Overview
 

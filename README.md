@@ -1,6 +1,6 @@
-# YouTube Chat
+# YouTube CLI Companion
 
-Chat with any YouTube video using AI. Ask questions, explore topics, and get instant answers from video transcripts.
+Turn Any YouTube Video into an Instant AI Chat — Ask, Summarize, and Learn Without Watching It All
 
 ## What You Can Do
 
@@ -20,7 +20,7 @@ Chat with any YouTube video using AI. Ask questions, explore topics, and get ins
 
 1. Clone the repository from GitHub:
    ```bash
-   git clone https://github.com/Genebio/youtube-chat.git
+   git clone https://github.com/etikhonov-dev/youtube-chat.git
    cd youtube-chat
    ```
 
@@ -44,7 +44,7 @@ Chat with any YouTube video using AI. Ask questions, explore topics, and get ins
 Start chatting with any YouTube video:
 
 ```bash
-ytchat https://youtu.be/bZQun8Y4L2A
+youtube-chat https://youtu.be/bZQun8Y4L2A
 ```
 
 ### What Happens Next

@@ -76,7 +76,7 @@ const TRANSLATIONS = {
     export_clipboard_success: "✅ Conversation copied to clipboard!",
     export_file_prompt: "Enter filename (default: {filename}): ",
     export_file_success: "✅ Conversation saved to: {filename}",
-    export_title: "YouTube Chat Conversation Export",
+    export_title: "YouTube CLI Companion Conversation Export",
     export_no_history: "No conversation history available.",
 
     // Language settings
@@ -162,7 +162,7 @@ const TRANSLATIONS = {
     export_clipboard_success: "✅ ¡Conversación copiada al portapapeles!",
     export_file_prompt: "Ingresa el nombre del archivo (predeterminado: {filename}): ",
     export_file_success: "✅ Conversación guardada en: {filename}",
-    export_title: "Exportación de Conversación de YouTube Chat",
+    export_title: "Exportación de Conversación de YouTube CLI Companion",
     export_no_history: "No hay historial de conversación disponible.",
 
     lang_header: "Configuración de Idioma",
@@ -245,7 +245,7 @@ const TRANSLATIONS = {
     export_clipboard_success: "✅ Conversation copiée dans le presse-papiers!",
     export_file_prompt: "Entrez le nom du fichier (par défaut: {filename}): ",
     export_file_success: "✅ Conversation enregistrée dans: {filename}",
-    export_title: "Exportation de Conversation YouTube Chat",
+    export_title: "Exportation de Conversation YouTube CLI Companion",
     export_no_history: "Aucun historique de conversation disponible.",
 
     lang_header: "Paramètres de Langue",
@@ -320,7 +320,7 @@ const TRANSLATIONS = {
     export_clipboard_success: "✅ Konversation in Zwischenablage kopiert!",
     export_file_prompt: "Geben Sie den Dateinamen ein (Standard: {filename}): ",
     export_file_success: "✅ Konversation gespeichert in: {filename}",
-    export_title: "YouTube Chat Konversation Export",
+    export_title: "YouTube CLI Companion Konversation Export",
     export_no_history: "Kein Konversationsverlauf verfügbar.",
 
     lang_header: "Spracheinstellungen",
@@ -395,7 +395,7 @@ const TRANSLATIONS = {
     export_clipboard_success: "✅ Conversazione copiata negli appunti!",
     export_file_prompt: "Inserisci il nome del file (predefinito: {filename}): ",
     export_file_success: "✅ Conversazione salvata in: {filename}",
-    export_title: "Esportazione Conversazione YouTube Chat",
+    export_title: "Esportazione Conversazione YouTube CLI Companion",
     export_no_history: "Nessuna cronologia di conversazione disponibile.",
 
     lang_header: "Impostazioni Lingua",
@@ -469,7 +469,7 @@ const TRANSLATIONS = {
     export_clipboard_success: "✅ Conversa copiada para a área de transferência!",
     export_file_prompt: "Digite o nome do arquivo (padrão: {filename}): ",
     export_file_success: "✅ Conversa salva em: {filename}",
-    export_title: "Exportação de Conversa do YouTube Chat",
+    export_title: "Exportação de Conversa do YouTube CLI Companion",
     export_no_history: "Nenhum histórico de conversa disponível.",
 
     lang_header: "Configurações de Idioma",
@@ -543,7 +543,7 @@ const TRANSLATIONS = {
     export_clipboard_success: "✅ Беседа скопирована в буфер обмена!",
     export_file_prompt: "Введите имя файла (по умолчанию: {filename}): ",
     export_file_success: "✅ Беседа сохранена в: {filename}",
-    export_title: "Экспорт Беседы YouTube Chat",
+    export_title: "Экспорт Беседы YouTube CLI Companion",
     export_no_history: "Нет доступной истории беседы.",
 
     lang_header: "Языковые Настройки",
@@ -617,7 +617,7 @@ const TRANSLATIONS = {
     export_clipboard_success: "✅ 会話をクリップボードにコピーしました！",
     export_file_prompt: "ファイル名を入力してください（デフォルト: {filename}）: ",
     export_file_success: "✅ 会話を保存しました: {filename}",
-    export_title: "YouTube Chat 会話エクスポート",
+    export_title: "YouTube CLI Companion 会話エクスポート",
     export_no_history: "会話履歴がありません。",
 
     lang_header: "言語設定",
@@ -691,7 +691,7 @@ const TRANSLATIONS = {
     export_clipboard_success: "✅ 대화를 클립보드에 복사했습니다!",
     export_file_prompt: "파일 이름을 입력하세요 (기본값: {filename}): ",
     export_file_success: "✅ 대화가 저장되었습니다: {filename}",
-    export_title: "YouTube Chat 대화 내보내기",
+    export_title: "YouTube CLI Companion 대화 내보내기",
     export_no_history: "대화 기록이 없습니다.",
 
     lang_header: "언어 설정",
@@ -765,7 +765,7 @@ const TRANSLATIONS = {
     export_clipboard_success: "✅ 对话已复制到剪贴板！",
     export_file_prompt: "输入文件名 (默认: {filename}): ",
     export_file_success: "✅ 对话已保存到: {filename}",
-    export_title: "YouTube Chat 对话导出",
+    export_title: "YouTube CLI Companion 对话导出",
     export_no_history: "没有可用的对话历史记录。",
 
     lang_header: "语言设置",
@@ -839,7 +839,7 @@ const TRANSLATIONS = {
     export_clipboard_success: "✅ تم نسخ المحادثة إلى الحافظة!",
     export_file_prompt: "أدخل اسم الملف (الافتراضي: {filename}): ",
     export_file_success: "✅ تم حفظ المحادثة في: {filename}",
-    export_title: "تصدير محادثة YouTube Chat",
+    export_title: "تصدير محادثة YouTube CLI Companion",
     export_no_history: "لا يوجد سجل محادثة متاح.",
 
     lang_header: "إعدادات اللغة",
@@ -913,7 +913,7 @@ const TRANSLATIONS = {
     export_clipboard_success: "✅ बातचीत क्लिपबोर्ड पर कॉपी की गई!",
     export_file_prompt: "फ़ाइल नाम दर्ज करें (डिफ़ॉल्ट: {filename}): ",
     export_file_success: "✅ बातचीत सहेजी गई: {filename}",
-    export_title: "YouTube Chat बातचीत निर्यात",
+    export_title: "YouTube CLI Companion बातचीत निर्यात",
     export_no_history: "कोई बातचीत इतिहास उपलब्ध नहीं है।",
 
     lang_header: "भाषा सेटिंग्स",
@@ -987,7 +987,7 @@ const TRANSLATIONS = {
     export_clipboard_success: "✅ Gesprek gekopieerd naar klembord!",
     export_file_prompt: "Voer bestandsnaam in (standaard: {filename}): ",
     export_file_success: "✅ Gesprek opgeslagen in: {filename}",
-    export_title: "YouTube Chat Gesprekexport",
+    export_title: "YouTube CLI Companion Gesprekexport",
     export_no_history: "Geen gespreksgeschiedenis beschikbaar.",
 
     lang_header: "Taalinstellingen",
@@ -1061,7 +1061,7 @@ const TRANSLATIONS = {
     export_clipboard_success: "✅ Rozmowa skopiowana do schowka!",
     export_file_prompt: "Wprowadź nazwę pliku (domyślnie: {filename}): ",
     export_file_success: "✅ Rozmowa zapisana w: {filename}",
-    export_title: "Eksport Rozmowy YouTube Chat",
+    export_title: "Eksport Rozmowy YouTube CLI Companion",
     export_no_history: "Brak dostępnej historii rozmowy.",
 
     lang_header: "Ustawienia Języka",
@@ -1209,7 +1209,7 @@ const TRANSLATIONS = {
     export_clipboard_success: "✅ Đã sao chép cuộc trò chuyện vào clipboard!",
     export_file_prompt: "Nhập tên tệp (mặc định: {filename}): ",
     export_file_success: "✅ Đã lưu cuộc trò chuyện vào: {filename}",
-    export_title: "Xuất Cuộc Trò Chuyện YouTube Chat",
+    export_title: "Xuất Cuộc Trò Chuyện YouTube CLI Companion",
     export_no_history: "Không có lịch sử cuộc trò chuyện.",
 
     lang_header: "Cài Đặt Ngôn Ngữ",
@@ -1283,7 +1283,7 @@ const TRANSLATIONS = {
     export_clipboard_success: "✅ คัดลอกการสนทนาไปยังคลิปบอร์ดแล้ว!",
     export_file_prompt: "ป้อนชื่อไฟล์ (ค่าเริ่มต้น: {filename}): ",
     export_file_success: "✅ บันทึกการสนทนาไว้ที่: {filename}",
-    export_title: "การส่งออกการสนทนา YouTube Chat",
+    export_title: "การส่งออกการสนทนา YouTube CLI Companion",
     export_no_history: "ไม่มีประวัติการสนทนา",
 
     lang_header: "การตั้งค่าภาษา",
@@ -1357,7 +1357,7 @@ const TRANSLATIONS = {
     export_clipboard_success: "✅ Konversation kopierad till urklipp!",
     export_file_prompt: "Ange filnamn (standard: {filename}): ",
     export_file_success: "✅ Konversation sparad till: {filename}",
-    export_title: "YouTube Chat Konversationsexport",
+    export_title: "YouTube CLI Companion Konversationsexport",
     export_no_history: "Ingen konversationshistorik tillgänglig.",
 
     lang_header: "Språkinställningar",
@@ -1431,7 +1431,7 @@ const TRANSLATIONS = {
     export_clipboard_success: "✅ Samtale kopieret til udklipsholder!",
     export_file_prompt: "Indtast filnavn (standard: {filename}): ",
     export_file_success: "✅ Samtale gemt til: {filename}",
-    export_title: "YouTube Chat Samtale Eksport",
+    export_title: "YouTube CLI Companion Samtale Eksport",
     export_no_history: "Ingen samtalehistorik tilgængelig.",
 
     lang_header: "Sprogindstillinger",
@@ -1505,7 +1505,7 @@ const TRANSLATIONS = {
     export_clipboard_success: "✅ Keskustelu kopioitu leikepöydälle!",
     export_file_prompt: "Syötä tiedostonimi (oletus: {filename}): ",
     export_file_success: "✅ Keskustelu tallennettu: {filename}",
-    export_title: "YouTube Chat Keskustelun Vienti",
+    export_title: "YouTube CLI Companion Keskustelun Vienti",
     export_no_history: "Keskusteluhistoriaa ei ole saatavilla.",
 
     lang_header: "Kieliasetukset",
@@ -1579,7 +1579,7 @@ const TRANSLATIONS = {
     export_clipboard_success: "✅ Samtale kopiert til utklippstavle!",
     export_file_prompt: "Angi filnavn (standard: {filename}): ",
     export_file_success: "✅ Samtale lagret til: {filename}",
-    export_title: "YouTube Chat Samtale Eksport",
+    export_title: "YouTube CLI Companion Samtale Eksport",
     export_no_history: "Ingen samtalehistorikk tilgjengelig.",
 
     lang_header: "Språkinnstillinger",
@@ -1653,7 +1653,7 @@ const TRANSLATIONS = {
     export_clipboard_success: "✅ Konverzace zkopírována do schránky!",
     export_file_prompt: "Zadejte název souboru (výchozí: {filename}): ",
     export_file_success: "✅ Konverzace uložena do: {filename}",
-    export_title: "Export YouTube Chat Konverzace",
+    export_title: "Export YouTube CLI Companion Konverzace",
     export_no_history: "Není dostupná žádná historie konverzace.",
 
     lang_header: "Jazyková Nastavení",
@@ -1727,7 +1727,7 @@ const TRANSLATIONS = {
     export_clipboard_success: "✅ Розмову скопійовано в буфер обміну!",
     export_file_prompt: "Введіть ім'я файлу (за замовчуванням: {filename}): ",
     export_file_success: "✅ Розмову збережено до: {filename}",
-    export_title: "Експорт Розмови YouTube Chat",
+    export_title: "Експорт Розмови YouTube CLI Companion",
     export_no_history: "Історія розмови недоступна.",
 
     lang_header: "Мовні Налаштування",
