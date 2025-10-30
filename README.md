@@ -66,23 +66,21 @@ You: What are the key takeaways?
 Assistant: [Summary with references to video sections]
 ```
 
-### Export Your Conversation
+### Available Commands
 
-Save your conversation for later reference:
+Type `/` to see all available commands with auto-completion:
 
-```
-You: /export
-```
-
-Choose to either:
-- **Copy to clipboard** - Paste into any document
-- **Save to file** - Creates a timestamped text file in your current directory
-
-### Commands
-
-- `exit` or `quit` - End the chat session
-- `/export` - Export conversation to clipboard or file
-- `Ctrl+C` - Quick exit
+- **`/summarize`** - Generate a comprehensive summary of the video's main topics and key points
+- **`/export`** - Export the current conversation to a file or clipboard
+  - Copy to clipboard for quick sharing
+  - Save to file with automatic timestamp naming
+- **`/lang`** - Change UI and transcript language preferences
+  - Switch between English, French, and more
+  - Customize both interface and video transcript language
+- **`/model`** - Select different AI models (OpenRouter integration)
+  - Coming soon: Choose from multiple AI providers
+- **`/quit`** or `/exit` - Exit the application
+  - Alternative: Press `Ctrl+C` for quick exit
 
 ## Tips for Best Results
 
